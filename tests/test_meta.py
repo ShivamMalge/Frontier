@@ -37,9 +37,7 @@ def test_strategy_catalogue_is_complete_and_honest(client):
     # Only max-Sharpe consumes the return forecast; the other nine are risk-only,
     # so a better forecasting model cannot improve them.
     assert by_name["Markowitz_MaxSharpe"]["uses_expected_returns"] is True
-    assert [n for n, s in by_name.items() if s["uses_expected_returns"]] == [
-        "Markowitz_MaxSharpe"
-    ]
+    assert [n for n, s in by_name.items() if s["uses_expected_returns"]] == ["Markowitz_MaxSharpe"]
     # GMV permits shorts; its long-only twin does not.
     assert by_name["GMV"]["long_only"] is False
     assert by_name["Markowitz_MinVar"]["long_only"] is True

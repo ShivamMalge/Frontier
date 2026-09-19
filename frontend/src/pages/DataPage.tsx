@@ -7,19 +7,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import type { CoverageResponse, IngestResponse, QueryResponse } from "../api/schema";
-import { useAsync } from "../hooks/useAsync";
-import { useJob } from "../hooks/useJob";
-import { useMeta } from "../state";
-import { Card, Note, Stat } from "../components/Bits";
-import { RunControls } from "../components/RunControls";
-import { JobBar } from "../components/JobBar";
-import { Table, type Column } from "../components/Table";
 import { Chart } from "../charts/Chart";
 import { bars } from "../charts/options";
 import { barChartClass, usePalette } from "../charts/theme";
+import { Card, Note, Stat } from "../components/Bits";
+import { JobBar } from "../components/JobBar";
+import { RunControls } from "../components/RunControls";
+import { type Column, Table } from "../components/Table";
+import { useAsync } from "../hooks/useAsync";
+import { useJob } from "../hooks/useJob";
 import { count } from "../lib/format";
+import { useMeta } from "../state";
 
-const SAMPLE_SQL = "SELECT ticker, count(*) AS rows, min(date) AS first, max(date) AS last\nFROM prices GROUP BY ticker ORDER BY rows DESC";
+const SAMPLE_SQL =
+  "SELECT ticker, count(*) AS rows, min(date) AS first, max(date) AS last\nFROM prices GROUP BY ticker ORDER BY rows DESC";
 
 function isIngest(value: unknown): value is IngestResponse {
   return !!value && typeof value === "object" && "rows_written" in value;
@@ -50,16 +51,29 @@ export function DataPage() {
     const rows = [...store.coverage]
       .sort((a, b) => b.rows - a.rows)
       .map((c): [string, number] => [c.ticker, c.rows]);
-    return bars(palette, rows, { slot: 2, format: (v) => count(v), label: "rows per ticker" });
+    return bars(palette, rows, {
+      slot: 2,
+      format: (v) => count(v),
+      label: "rows per ticker",
+    });
   }, [store, palette]);
 
   const coverageColumns: Column<CoverageResponse["coverage"][number]>[] = [
-    { key: "t", header: "Ticker", render: (c) => <span className="mono">{c.ticker}</span> },
+    {
+      key: "t",
+      header: "Ticker",
+      render: (c) => <span className="mono">{c.ticker}</span>,
+    },
     { key: "rows", header: "Rows", num: true, render: (c) => count(c.rows) },
     { key: "first", header: "First", num: true, render: (c) => c.first_date },
     { key: "last", header: "Last", num: true, render: (c) => c.last_date },
     { key: "vint", header: "Vintages", num: true, render: (c) => c.vintages },
-    { key: "ing", header: "Last ingested", num: true, render: (c) => c.last_ingested.slice(0, 19).replace("T", " ") },
+    {
+      key: "ing",
+      header: "Last ingested",
+      num: true,
+      render: (c) => c.last_ingested.slice(0, 19).replace("T", " "),
+    },
   ];
 
   return (
@@ -74,7 +88,10 @@ export function DataPage() {
         </div>
       </div>
 
-      <Card title="Ingest" hint="Downloads OHLCV for the selected universe into the store. Runs as a job.">
+      <Card
+        title="Ingest"
+        hint="Downloads OHLCV for the selected universe into the store. Runs as a job."
+      >
         <RunControls showBackend={false}>
           <button
             type="button"
@@ -82,7 +99,11 @@ export function DataPage() {
             disabled={ingest.busy || params.tickers.length < 1}
             onClick={() =>
               ingest.submit(() =>
-                api.submitIngest({ tickers: params.tickers, start: params.start, end: params.end }),
+                api.submitIngest({
+                  tickers: params.tickers,
+                  start: params.start,
+                  end: params.end,
+                }),
               )
             }
           >
@@ -97,7 +118,11 @@ export function DataPage() {
           <dl className="grid stats" style={{ marginTop: 14, marginBottom: 0 }}>
             <Stat label="Rows written" value={count(ingest.result.rows_written)} />
             <Stat label="Added" value={count(ingest.result.rows_added)} />
-            <Stat label="Revised" value={count(ingest.result.rows_revised)} sub={ingest.result.revised_tickers.join(" ")} />
+            <Stat
+              label="Revised"
+              value={count(ingest.result.rows_revised)}
+              sub={ingest.result.revised_tickers.join(" ")}
+            />
           </dl>
         )}
       </Card>
@@ -118,7 +143,13 @@ export function DataPage() {
               <Stat label="Rows" value={count(store.total_rows)} />
               <Stat label="Gaps" value={store.gaps.length} sub="runs of missing days" />
             </dl>
-            {rowsChart && <Chart option={rowsChart} className={barChartClass(store.coverage.length)} label="rows per ticker" />}
+            {rowsChart && (
+              <Chart
+                option={rowsChart}
+                className={barChartClass(store.coverage.length)}
+                label="rows per ticker"
+              />
+            )}
             <Table rows={store.coverage} columns={coverageColumns} rowKey={(c) => c.ticker} />
           </Card>
 
@@ -127,10 +158,29 @@ export function DataPage() {
               <Table
                 rows={[...store.gaps].sort((a, b) => b.gap_days - a.gap_days).slice(0, 25)}
                 columns={[
-                  { key: "t", header: "Ticker", render: (g) => <span className="mono">{g.ticker}</span> },
-                  { key: "s", header: "From", num: true, render: (g) => g.gap_start },
-                  { key: "e", header: "To", num: true, render: (g) => g.gap_end },
-                  { key: "d", header: "Days", num: true, render: (g) => g.gap_days },
+                  {
+                    key: "t",
+                    header: "Ticker",
+                    render: (g) => <span className="mono">{g.ticker}</span>,
+                  },
+                  {
+                    key: "s",
+                    header: "From",
+                    num: true,
+                    render: (g) => g.gap_start,
+                  },
+                  {
+                    key: "e",
+                    header: "To",
+                    num: true,
+                    render: (g) => g.gap_end,
+                  },
+                  {
+                    key: "d",
+                    header: "Days",
+                    num: true,
+                    render: (g) => g.gap_days,
+                  },
                 ]}
                 rowKey={(g) => `${g.ticker}-${g.gap_start}`}
               />
@@ -160,7 +210,9 @@ export function DataPage() {
         {query.error && <Note kind="error">{query.error.message}</Note>}
         {query.data && (
           <div style={{ marginTop: 14 }}>
-            {query.data.truncated && <Note kind="warn">Truncated to {query.data.row_count} rows.</Note>}
+            {query.data.truncated && (
+              <Note kind="warn">Truncated to {query.data.row_count} rows.</Note>
+            )}
             <Table
               rows={query.data.rows.map((row, index) => ({ row, index }))}
               columns={query.data.columns.map((column, position) => ({

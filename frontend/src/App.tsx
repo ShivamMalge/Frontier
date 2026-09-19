@@ -1,12 +1,12 @@
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
-import { useMeta } from "./state";
-import { RunPage } from "./pages/RunPage";
-import { ForecastPage } from "./pages/ForecastPage";
-import { PortfolioPage } from "./pages/PortfolioPage";
+import { Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { Note } from "./components/Bits";
 import { BacktestPage } from "./pages/BacktestPage";
 import { DataPage } from "./pages/DataPage";
+import { ForecastPage } from "./pages/ForecastPage";
+import { PortfolioPage } from "./pages/PortfolioPage";
+import { RunPage } from "./pages/RunPage";
 import { TrackingPage } from "./pages/TrackingPage";
-import { Note } from "./components/Bits";
+import { useMeta } from "./state";
 
 const PAGES = [
   { to: "/run", label: "Run", hint: "pipeline" },
@@ -31,7 +31,10 @@ function Health() {
     );
   }
   return (
-    <div className="status-line" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+    <div
+      className="status-line"
+      style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}
+    >
       <span>
         <span className="dot ok" />
         {health.app} {health.version}
@@ -57,7 +60,11 @@ export function App() {
         </div>
         <nav className="nav">
           {PAGES.map((page) => (
-            <NavLink key={page.to} to={page.to} className={({ isActive }) => (isActive ? "active" : "")}>
+            <NavLink
+              key={page.to}
+              to={page.to}
+              className={({ isActive }) => (isActive ? "active" : "")}
+            >
               {page.label}
               <small>{page.hint}</small>
             </NavLink>
@@ -74,8 +81,8 @@ export function App() {
       <main className="main">
         {!loading && offline && (
           <Note kind="error">
-            The API is not answering. Start it with <code>uv run uvicorn app.main:app --reload</code>{" "}
-            and reload this page.
+            The API is not answering. Start it with{" "}
+            <code>uv run uvicorn app.main:app --reload</code> and reload this page.
           </Note>
         )}
         <Routes>

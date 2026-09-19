@@ -18,9 +18,7 @@ def prices(request: PricesRequest) -> PricesResponse:
         start=result.start,
         end=result.end,
         tickers=result.tickers,
-        failed=[
-            TickerError(ticker=t, reason="no market data returned") for t in result.missing
-        ],
+        failed=[TickerError(ticker=t, reason="no market data returned") for t in result.missing],
         observations=len(result.prices),
         cached=result.cached,
         prices=Frame.from_pandas(result.prices),
@@ -34,9 +32,7 @@ def returns(request: PricesRequest) -> ReturnsResponse:
         start=result.start,
         end=result.end,
         tickers=[str(column) for column in frame.columns],
-        failed=[
-            TickerError(ticker=t, reason="no market data returned") for t in result.missing
-        ],
+        failed=[TickerError(ticker=t, reason="no market data returned") for t in result.missing],
         observations=len(frame),
         cached=result.cached,
         returns=Frame.from_pandas(frame),

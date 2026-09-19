@@ -20,9 +20,7 @@ def lstm_predict(model, scaler, stock_data, training_data_len, lookback_window):
     scaled_data = np.asarray(scaler.transform(stock_data)).reshape(-1, 1)
 
     test_data = scaled_data[training_data_len - lookback_window :]
-    x_test = [
-        test_data[i - lookback_window : i, 0] for i in range(lookback_window, len(test_data))
-    ]
+    x_test = [test_data[i - lookback_window : i, 0] for i in range(lookback_window, len(test_data))]
     if not x_test:
         return None, None
 

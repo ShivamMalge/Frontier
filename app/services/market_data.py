@@ -118,9 +118,7 @@ def _from_store(tickers: list[str], start: str, end: str) -> pd.DataFrame:
             missing=",".join(missing),
         )
 
-    wide = store.read_wide(
-        wanted, dt.date.fromisoformat(start), dt.date.fromisoformat(end)
-    )
+    wide = store.read_wide(wanted, dt.date.fromisoformat(start), dt.date.fromisoformat(end))
     if wide.is_empty() or wide.width <= 1:
         return pd.DataFrame()
 

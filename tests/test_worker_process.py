@@ -48,14 +48,14 @@ def store(redis_url) -> RedisJobStore:
     return RedisJobStore(connection, queue_name=QUEUE, retention_seconds=3600)
 
 
-def run_worker(
-    redis_url: str, timeout: float = 120, **env: str
-) -> subprocess.CompletedProcess:
+def run_worker(redis_url: str, timeout: float = 120, **env: str) -> subprocess.CompletedProcess:
     """Run the real worker entry point in burst mode and wait for it to drain."""
     return subprocess.run(
         [sys.executable, "-m", "app.worker", "--url", redis_url, "--queues", QUEUE, "--burst"],
         capture_output=True,
         text=True,
+        # The exit code is what the caller asserts on; do not raise on it here.
+        check=False,
         timeout=timeout,
         cwd=REPO_ROOT,
         env={**os.environ, "PYTHONPATH": REPO_ROOT, **env},
@@ -112,6 +112,8 @@ def test_worker_exits_nonzero_when_redis_is_unreachable():
         [sys.executable, "-m", "app.worker", "--url", "redis://127.0.0.1:1/0", "--burst"],
         capture_output=True,
         text=True,
+        # A non-zero exit is exactly what this test is checking for.
+        check=False,
         timeout=60,
         cwd=REPO_ROOT,
         env={**os.environ, "PYTHONPATH": REPO_ROOT},

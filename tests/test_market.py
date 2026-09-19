@@ -4,9 +4,7 @@ from __future__ import annotations
 
 
 def test_prices_returns_a_shaped_frame(client, window):
-    body = client.post(
-        "/api/v1/market/prices", json={"tickers": ["AAA", "BBB"], **window}
-    ).json()
+    body = client.post("/api/v1/market/prices", json={"tickers": ["AAA", "BBB"], **window}).json()
 
     assert body["tickers"] == ["AAA", "BBB"]
     assert body["observations"] == len(body["prices"]["index"])
@@ -22,9 +20,7 @@ def test_second_identical_request_is_served_from_cache(client, window):
 
 
 def test_unknown_tickers_are_reported_not_fatal(client, window):
-    body = client.post(
-        "/api/v1/market/prices", json={"tickers": ["AAA", "NOPE"], **window}
-    ).json()
+    body = client.post("/api/v1/market/prices", json={"tickers": ["AAA", "NOPE"], **window}).json()
     assert body["tickers"] == ["AAA"]
     assert [f["ticker"] for f in body["failed"]] == ["NOPE"]
 
@@ -36,9 +32,7 @@ def test_all_tickers_unknown_is_a_gateway_error(client, window):
 
 
 def test_returns_are_on_a_returns_scale(client, window):
-    body = client.post(
-        "/api/v1/market/returns", json={"tickers": ["AAA", "BBB"], **window}
-    ).json()
+    body = client.post("/api/v1/market/returns", json={"tickers": ["AAA", "BBB"], **window}).json()
     values = [abs(v) for row in body["returns"]["data"] for v in row if v is not None]
     # Daily simple returns sit within a few percent; price levels would be ~100.
     assert max(values) < 0.5

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { makeSlots, MAX_SERIES } from "./theme";
+import { MAX_SERIES, makeSlots } from "./theme";
 
 describe("makeSlots", () => {
   it("gives each entity its own slot", () => {
@@ -12,7 +12,7 @@ describe("makeSlots", () => {
     // The rule this enforces: filtering must not repaint the survivors.
     const slot = makeSlots();
     const all = ["HRP", "GMV", "RiskParity"];
-    all.forEach((name) => slot(name, all));
+    for (const name of all) slot(name, all);
 
     const fewer = ["HRP", "RiskParity"];
     expect(slot("HRP", fewer)).toBe(0);
@@ -22,7 +22,7 @@ describe("makeSlots", () => {
   it("reuses a slot only once its holder has left the selection", () => {
     const slot = makeSlots();
     const first = ["HRP", "GMV"];
-    first.forEach((name) => slot(name, first));
+    for (const name of first) slot(name, first);
 
     const second = ["HRP", "MinCVaR"];
     expect(slot("MinCVaR", second)).toBe(1);

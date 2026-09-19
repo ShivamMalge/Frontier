@@ -13,13 +13,14 @@ than on moves exceeding +/- c * sigma, rescales by ``(p - 0.5) / 0.5``, and offe
 positive semi-definiteness guarantee. ``riskfolio_strategies.gerber_covariance``
 uses the real definition.
 """
+
 import numpy as np
 import pandas as pd
 
 
 def gerber_covariance(returns: pd.DataFrame, threshold: float = 0.5) -> pd.DataFrame:
     R = returns.to_numpy()
-    n, d = R.shape
+    _rows, d = R.shape
     sign_matrix = np.sign(R)
     G = np.zeros((d, d))
 
@@ -32,6 +33,7 @@ def gerber_covariance(returns: pd.DataFrame, threshold: float = 0.5) -> pd.DataF
             G[i, j] = sij * np.std(R[:, i]) * np.std(R[:, j])
 
     return pd.DataFrame(G, index=returns.columns, columns=returns.columns)
+
 
 def gerber_inverse_var_weights(cov_matrix: pd.DataFrame) -> pd.Series:
     inv_var = 1 / np.diag(cov_matrix)

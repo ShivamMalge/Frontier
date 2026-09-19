@@ -7,9 +7,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import type { TrackedRun, TrackedRunList, TrackingStatus } from "../api/schema";
-import { useAsync } from "../hooks/useAsync";
 import { Card, Note, Stat } from "../components/Bits";
-import { Table, type Column } from "../components/Table";
+import { type Column, Table } from "../components/Table";
+import { useAsync } from "../hooks/useAsync";
 import { num, timestamp } from "../lib/format";
 
 const METRIC_KEYS = ["mase_mean", "sharpe_best", "mase_min", "mase_max"];
@@ -41,14 +41,24 @@ export function TrackingPage() {
     },
     { key: "kind", header: "Kind", render: (r) => r.kind ?? "--" },
     { key: "status", header: "Status", render: (r) => r.status },
-    { key: "started", header: "Started", num: true, render: (r) => timestamp(r.started_at) },
+    {
+      key: "started",
+      header: "Started",
+      num: true,
+      render: (r) => timestamp(r.started_at),
+    },
     {
       key: "commit",
       header: "Commit",
       num: true,
       render: (r) => <span className="mono">{r.git_commit?.slice(0, 8) ?? "--"}</span>,
     },
-    { key: "vintage", header: "Data vintage", num: true, render: (r) => r.data_vintage?.slice(0, 10) ?? "--" },
+    {
+      key: "vintage",
+      header: "Data vintage",
+      num: true,
+      render: (r) => r.data_vintage?.slice(0, 10) ?? "--",
+    },
     ...METRIC_KEYS.map(
       (key): Column<TrackedRun> => ({
         key,
@@ -81,15 +91,28 @@ export function TrackingPage() {
       {status.data && enabled && (
         <Card title="Status">
           <dl className="grid stats" style={{ margin: 0 }}>
-            <Stat label="Experiment" value={<span style={{ fontSize: 15 }}>{status.data.experiment}</span>} />
+            <Stat
+              label="Experiment"
+              value={<span style={{ fontSize: 15 }}>{status.data.experiment}</span>}
+            />
             <Stat label="Runs" value={status.data.run_count ?? 0} />
             <Stat
               label="Store"
-              value={<span style={{ fontSize: 12 }} className="mono">{status.data.tracking_uri}</span>}
+              value={
+                <span style={{ fontSize: 12 }} className="mono">
+                  {status.data.tracking_uri}
+                </span>
+              }
             />
           </dl>
           {status.data.ui_command && (
-            <p style={{ marginTop: 12, marginBottom: 0, color: "var(--text-secondary)" }}>
+            <p
+              style={{
+                marginTop: 12,
+                marginBottom: 0,
+                color: "var(--text-secondary)",
+              }}
+            >
               Browse them in MLflow's own UI: <code>{status.data.ui_command}</code>
             </p>
           )}
@@ -116,7 +139,9 @@ export function TrackingPage() {
           rowKey={(r) => r.run_id}
           highlight={(r) => r.run_id === open}
           onSelect={(r) => setOpen(r.run_id === open ? null : r.run_id)}
-          empty={enabled ? "No runs recorded yet." : "Tracking is off, so there is nothing to show."}
+          empty={
+            enabled ? "No runs recorded yet." : "Tracking is off, so there is nothing to show."
+          }
         />
       </Card>
 
@@ -124,10 +149,22 @@ export function TrackingPage() {
         <div className="grid two">
           <Card title="Parameters">
             <Table
-              rows={Object.entries(selected.params ?? {}).map(([key, value]) => ({ key, value: String(value) }))}
+              rows={Object.entries(selected.params ?? {}).map(([key, value]) => ({
+                key,
+                value: String(value),
+              }))}
               columns={[
-                { key: "k", header: "Name", render: (p) => <span className="mono">{p.key}</span> },
-                { key: "v", header: "Value", num: true, render: (p) => p.value },
+                {
+                  key: "k",
+                  header: "Name",
+                  render: (p) => <span className="mono">{p.key}</span>,
+                },
+                {
+                  key: "v",
+                  header: "Value",
+                  num: true,
+                  render: (p) => p.value,
+                },
               ]}
               rowKey={(p) => p.key}
               empty="No parameters recorded."
@@ -135,10 +172,22 @@ export function TrackingPage() {
           </Card>
           <Card title="Metrics">
             <Table
-              rows={Object.entries(selected.metrics ?? {}).map(([key, value]) => ({ key, value: Number(value) }))}
+              rows={Object.entries(selected.metrics ?? {}).map(([key, value]) => ({
+                key,
+                value: Number(value),
+              }))}
               columns={[
-                { key: "k", header: "Name", render: (m) => <span className="mono">{m.key}</span> },
-                { key: "v", header: "Value", num: true, render: (m) => num(m.value, 4) },
+                {
+                  key: "k",
+                  header: "Name",
+                  render: (m) => <span className="mono">{m.key}</span>,
+                },
+                {
+                  key: "v",
+                  header: "Value",
+                  num: true,
+                  render: (m) => num(m.value, 4),
+                },
               ]}
               rowKey={(m) => m.key}
               empty="No metrics recorded."

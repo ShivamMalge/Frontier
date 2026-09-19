@@ -1,0 +1,48 @@
+# Weekly, grouped, and capped: the point is to keep the lockfiles from going
+# stale, not to generate a PR per package.
+
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      python-minor:
+        # Majors arrive on their own, because they are the ones that need
+        # reading. torch and mlflow in particular move fast.
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      frontend-minor:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(frontend)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+
+  # The API and UI images both track a base tag rather than a digest; this is
+  # what notices when that tag has moved.
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /frontend
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "docker"

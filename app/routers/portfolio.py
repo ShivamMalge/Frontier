@@ -47,9 +47,7 @@ def optimize(request: OptimizeRequest) -> OptimizeResponse:
         tickers=[str(t) for t in weights.index],
         observations=len(returns),
         risk_free_rate=(
-            settings.risk_free_rate
-            if request.risk_free_rate is None
-            else request.risk_free_rate
+            settings.risk_free_rate if request.risk_free_rate is None else request.risk_free_rate
         ),
         weights=Frame.from_pandas(weights),
         warnings=warnings,
@@ -71,9 +69,7 @@ def evaluate(request: PerformanceRequest) -> PerformanceResponse:
     )
     return PerformanceResponse(
         risk_free_rate=(
-            settings.risk_free_rate
-            if request.risk_free_rate is None
-            else request.risk_free_rate
+            settings.risk_free_rate if request.risk_free_rate is None else request.risk_free_rate
         ),
         performance=[
             StrategyPerformance(
@@ -119,9 +115,7 @@ def frontier(request: FrontierRequest) -> FrontierResponse:
         tickers=assets,
         observations=len(returns),
         risk_free_rate=(
-            settings.risk_free_rate
-            if request.risk_free_rate is None
-            else request.risk_free_rate
+            settings.risk_free_rate if request.risk_free_rate is None else request.risk_free_rate
         ),
         points=[
             FrontierPointOut(

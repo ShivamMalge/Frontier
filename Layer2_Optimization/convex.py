@@ -77,7 +77,7 @@ def _solve(problem, label: str) -> None:
                 # they care about instead of relying on the solver's own confidence.
                 warnings.filterwarnings("ignore", message=".*Solution may be inaccurate.*")
                 problem.solve(solver=solver, **SOLVER_OPTIONS.get(solver, {}))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- solvers raise anything; fall through to the next one
             errors.append(f"{solver}: {type(exc).__name__}: {exc}")
             continue
         if problem.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
@@ -141,9 +141,7 @@ def min_variance(
     return _clean(w.value, constraints)
 
 
-def max_return(
-    mu: np.ndarray, assets: list[str], constraints: Constraints = DEFAULT
-) -> np.ndarray:
+def max_return(mu: np.ndarray, assets: list[str], constraints: Constraints = DEFAULT) -> np.ndarray:
     """Highest achievable expected return under ``constraints``."""
     import cvxpy as cp
 
@@ -243,7 +241,12 @@ def max_sharpe(
 
 
 def risk_parity(
-    cov: np.ndarray, assets: list[str], constraints: Constraints = DEFAULT
+    cov: np.ndarray,
+    # Unused here: the equal-risk condition determines every weight without
+    # reference to names. It stays in the signature because the dispatcher calls
+    # every optimizer the same way.
+    assets: list[str],  # noqa: ARG001
+    constraints: Constraints = DEFAULT,
 ) -> tuple[np.ndarray, list[str]]:
     """Equal risk contribution, via the convex log-barrier formulation.
 

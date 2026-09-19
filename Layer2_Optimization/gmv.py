@@ -11,6 +11,7 @@ Safe to delete once that history is no longer useful.
 Uses the pseudo-inverse, so short positions are permitted. Mathematically this is
 minimum variance without a non-negativity constraint, not a distinct strategy.
 """
+
 import numpy as np
 
 
@@ -18,5 +19,4 @@ def gmv_weights(cov_matrix):
     inv_cov = np.linalg.pinv(cov_matrix)
     ones = np.ones(cov_matrix.shape[0])
     w = inv_cov @ ones
-    w = w / w.sum()
-    return w
+    return w / w.sum()

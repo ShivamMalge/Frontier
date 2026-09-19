@@ -5,8 +5,9 @@
  * `/market/returns` rather than forecasts: it is for comparing the strategies
  * themselves. The Run page is the one that puts a forecast in front of them.
  */
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
+import { series, weightsFor } from "../api/frame";
 import type {
   Frame,
   FrontierResponse,
@@ -14,16 +15,15 @@ import type {
   PerformanceResponse,
   StrategyPerformance,
 } from "../api/schema";
-import { series, weightsFor } from "../api/frame";
-import { useAsync } from "../hooks/useAsync";
-import { useMeta } from "../state";
-import { Card, Field, Note, Spinner, Stat } from "../components/Bits";
-import { RunControls } from "../components/RunControls";
-import { Table, Signed, type Column } from "../components/Table";
 import { Chart } from "../charts/Chart";
 import { bars, frontier as frontierOption, timeSeries } from "../charts/options";
 import { makeSlots, usePalette } from "../charts/theme";
+import { Card, Field, Note, Spinner, Stat } from "../components/Bits";
+import { RunControls } from "../components/RunControls";
+import { type Column, Signed, Table } from "../components/Table";
+import { useAsync } from "../hooks/useAsync";
 import { num, pct } from "../lib/format";
+import { useMeta } from "../state";
 
 interface Bundle {
   returns: Frame;
@@ -45,9 +45,10 @@ export function PortfolioPage() {
   // than indexed off the catalogue, which would collide. See RunPage.
   const allocate = useRef(makeSlots());
 
-  const chosen = strategy && data?.optimize.weights.columns.includes(strategy)
-    ? strategy
-    : (data?.optimize.weights.columns[0] ?? null);
+  const chosen =
+    strategy && data?.optimize.weights.columns.includes(strategy)
+      ? strategy
+      : (data?.optimize.weights.columns[0] ?? null);
 
   async function run(signal: AbortSignal): Promise<Bundle> {
     const constraints = { min_weight: minWeight, max_weight: maxWeight };
@@ -79,7 +80,7 @@ export function PortfolioPage() {
     for (const name of active) assigned[name] = allocate.current(name, active);
     return assigned;
   }, [shown, chosen]);
-  const slotOf = (name: string) => slots[name] ?? 0;
+  const slotOf = useCallback((name: string) => slots[name] ?? 0, [slots]);
 
   const growth = useMemo(() => {
     if (!data) return null;
@@ -92,8 +93,7 @@ export function PortfolioPage() {
       })),
       { format: (v) => num(v, 2), zoom: true, label: "cumulative growth" },
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, shown, palette, slots]);
+  }, [data, shown, palette, slotOf]);
 
   const frontierChart = useMemo(() => {
     if (!data) return null;
@@ -107,7 +107,13 @@ export function PortfolioPage() {
       data.frontier.points,
       data.frontier.tangency_index,
       mark
-        ? [{ name: mark.strategy, volatility: mark.annual_volatility, expected_return: mark.annual_return }]
+        ? [
+            {
+              name: mark.strategy,
+              volatility: mark.annual_volatility,
+              expected_return: mark.annual_return,
+            },
+          ]
         : [],
     );
   }, [data, palette, chosen]);
@@ -119,15 +125,35 @@ export function PortfolioPage() {
       format: (v) => pct(v, 1),
       label: `weights for ${chosen}`,
     });
-  }, [data, chosen, palette, slots]);
+  }, [data, chosen, palette, slotOf]);
 
   const performanceColumns: Column<StrategyPerformance>[] = [
     { key: "s", header: "Strategy", render: (p) => p.strategy },
-    { key: "r", header: "Return", num: true, render: (p) => <Signed value={p.annual_return} render={(v) => pct(v)} /> },
-    { key: "v", header: "Volatility", num: true, render: (p) => pct(p.annual_volatility) },
-    { key: "sh", header: "Sharpe", num: true, render: (p) => <Signed value={p.sharpe} render={(v) => num(v)} /> },
+    {
+      key: "r",
+      header: "Return",
+      num: true,
+      render: (p) => <Signed value={p.annual_return} render={(v) => pct(v)} />,
+    },
+    {
+      key: "v",
+      header: "Volatility",
+      num: true,
+      render: (p) => pct(p.annual_volatility),
+    },
+    {
+      key: "sh",
+      header: "Sharpe",
+      num: true,
+      render: (p) => <Signed value={p.sharpe} render={(v) => num(v)} />,
+    },
     { key: "so", header: "Sortino", num: true, render: (p) => num(p.sortino) },
-    { key: "dd", header: "Max drawdown", num: true, render: (p) => <span className="neg">{pct(p.max_drawdown)}</span> },
+    {
+      key: "dd",
+      header: "Max drawdown",
+      num: true,
+      render: (p) => <span className="neg">{pct(p.max_drawdown)}</span>,
+    },
   ];
 
   return (
@@ -173,6 +199,9 @@ export function PortfolioPage() {
             {request.loading ? "Optimizing…" : "Optimize"}
           </button>
         </RunControls>
+        {params.tickers.length < 2 && (
+          <Note kind="warn">Select at least two tickers: a covariance needs a pair.</Note>
+        )}
         {request.loading && (
           <div style={{ marginTop: 12 }}>
             <Spinner>Returns, ten optimizers, performance and a 24-point frontier.</Spinner>
@@ -206,7 +235,9 @@ export function PortfolioPage() {
               title="Efficient frontier"
               hint={`Minimum-variance frontier from the same covariance the optimizers use. ${chosen ?? "The selected strategy"} is marked.`}
             >
-              {frontierChart && <Chart option={frontierChart} className="chart" label="efficient frontier" />}
+              {frontierChart && (
+                <Chart option={frontierChart} className="chart" label="efficient frontier" />
+              )}
             </Card>
 
             <Card
@@ -221,12 +252,19 @@ export function PortfolioPage() {
                 </select>
               }
             >
-              {weightsChart && <Chart option={weightsChart} className="chart" label={`weights for ${chosen}`} />}
+              {weightsChart && (
+                <Chart option={weightsChart} className="chart" label={`weights for ${chosen}`} />
+              )}
             </Card>
           </div>
 
-          <Card title="Cumulative growth of 1.0 invested" hint="The four best by Sharpe; the table below has all ten.">
-            {growth && <Chart option={growth} className="chart tall" label="cumulative growth by strategy" />}
+          <Card
+            title="Cumulative growth of 1.0 invested"
+            hint="The four best by Sharpe; the table below has all ten."
+          >
+            {growth && (
+              <Chart option={growth} className="chart tall" label="cumulative growth by strategy" />
+            )}
           </Card>
 
           <Card title="Performance" hint="Sorted by Sharpe.">

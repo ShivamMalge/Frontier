@@ -284,7 +284,7 @@ def run_forecast(
         series.name = ticker
         try:
             forecasts.append(spec.fn(series, params))
-        except Exception as exc:  # one bad ticker must not sink the request
+        except Exception as exc:  # noqa: BLE001 -- one bad ticker must not sink the request
             failures.append((str(ticker), f"{type(exc).__name__}: {exc}"))
 
     if on_progress:

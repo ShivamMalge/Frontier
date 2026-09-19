@@ -4,20 +4,20 @@
  * The run is a job, not a request -- `keras_lstm` trains one model per ticker
  * and takes minutes each -- so this submits, polls, and renders when it lands.
  */
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { PipelineResult, StrategyPerformance } from "../api/schema";
 import { series, weightsFor } from "../api/frame";
-import { useJob } from "../hooks/useJob";
-import { useMeta } from "../state";
-import { Card, Field, Note, Stat, Chips } from "../components/Bits";
-import { RunControls } from "../components/RunControls";
-import { JobBar } from "../components/JobBar";
-import { Table, Signed, type Column } from "../components/Table";
+import type { PipelineResult, StrategyPerformance } from "../api/schema";
 import { Chart } from "../charts/Chart";
 import { bars, timeSeries } from "../charts/options";
-import { MAX_SERIES, barChartClass, makeSlots, usePalette } from "../charts/theme";
+import { barChartClass, MAX_SERIES, makeSlots, usePalette } from "../charts/theme";
+import { Card, Chips, Field, Note, Stat } from "../components/Bits";
+import { JobBar } from "../components/JobBar";
+import { RunControls } from "../components/RunControls";
+import { type Column, Signed, Table } from "../components/Table";
+import { useJob } from "../hooks/useJob";
 import { num, pct } from "../lib/format";
+import { useMeta } from "../state";
 
 /** The same positional rule the service uses, applied without re-running. */
 function chooseByRisk(performance: StrategyPerformance[], tolerance: number): string {
@@ -71,7 +71,7 @@ export function RunPage() {
     for (const name of active) assigned[name] = allocate.current(name, active);
     return assigned;
   }, [shown, selected]);
-  const slotOf = (name: string) => slots[name] ?? 0;
+  const slotOf = useCallback((name: string) => slots[name] ?? 0, [slots]);
 
   const growth = useMemo(() => {
     if (!result) return null;
@@ -84,11 +84,14 @@ export function RunPage() {
       })),
       { format: (v) => num(v, 2), zoom: true, label: "cumulative growth" },
     );
-  }, [result, shown, palette, slots]);
+  }, [result, shown, palette, slotOf]);
 
   const mase = useMemo(() => {
     if (!result) return null;
-    const rows: [string, number][] = result.forecast_metrics.map((m) => [m.ticker, m.mase_vs_naive]);
+    const rows: [string, number][] = result.forecast_metrics.map((m) => [
+      m.ticker,
+      m.mase_vs_naive,
+    ]);
     return bars(palette, rows, {
       slot: 0,
       format: (v) => num(v, 3),
@@ -104,16 +107,22 @@ export function RunPage() {
       format: (v) => pct(v, 1),
       label: `weights for ${selected}`,
     });
-  }, [result, selected, palette, slots]);
+  }, [result, selected, palette, slotOf]);
 
   const metricColumns: Column<PipelineResult["forecast_metrics"][number]>[] = [
-    { key: "ticker", header: "Ticker", render: (m) => <span className="mono">{m.ticker}</span> },
+    {
+      key: "ticker",
+      header: "Ticker",
+      render: (m) => <span className="mono">{m.ticker}</span>,
+    },
     {
       key: "mase",
       header: "MASE",
       num: true,
       render: (m) => (
-        <span className={beatsBaseline(m.mase_vs_naive) ? "pos" : undefined}>{num(m.mase_vs_naive)}</span>
+        <span className={beatsBaseline(m.mase_vs_naive) ? "pos" : undefined}>
+          {num(m.mase_vs_naive)}
+        </span>
       ),
     },
     {
@@ -128,17 +137,44 @@ export function RunPage() {
       key: "legacy",
       header: "Legacy “accuracy”",
       num: true,
-      render: (m) => <span style={{ color: "var(--text-muted)" }}>{num(m.legacy_approximate_accuracy, 2)}</span>,
+      render: (m) => (
+        <span style={{ color: "var(--text-muted)" }}>{num(m.legacy_approximate_accuracy, 2)}</span>
+      ),
     },
   ];
 
   const performanceColumns: Column<StrategyPerformance>[] = [
     { key: "strategy", header: "Strategy", render: (p) => p.strategy },
-    { key: "ret", header: "Return", num: true, render: (p) => <Signed value={p.annual_return} render={(v) => pct(v)} /> },
-    { key: "vol", header: "Volatility", num: true, render: (p) => pct(p.annual_volatility) },
-    { key: "sharpe", header: "Sharpe", num: true, render: (p) => <Signed value={p.sharpe} render={(v) => num(v)} /> },
-    { key: "sortino", header: "Sortino", num: true, render: (p) => num(p.sortino) },
-    { key: "dd", header: "Max drawdown", num: true, render: (p) => <span className="neg">{pct(p.max_drawdown)}</span> },
+    {
+      key: "ret",
+      header: "Return",
+      num: true,
+      render: (p) => <Signed value={p.annual_return} render={(v) => pct(v)} />,
+    },
+    {
+      key: "vol",
+      header: "Volatility",
+      num: true,
+      render: (p) => pct(p.annual_volatility),
+    },
+    {
+      key: "sharpe",
+      header: "Sharpe",
+      num: true,
+      render: (p) => <Signed value={p.sharpe} render={(v) => num(v)} />,
+    },
+    {
+      key: "sortino",
+      header: "Sortino",
+      num: true,
+      render: (p) => num(p.sortino),
+    },
+    {
+      key: "dd",
+      header: "Max drawdown",
+      num: true,
+      render: (p) => <span className="neg">{pct(p.max_drawdown)}</span>,
+    },
   ];
 
   return (
@@ -155,7 +191,10 @@ export function RunPage() {
 
       <Card>
         <RunControls>
-          <Field label={`Risk tolerance ${risk.toFixed(2)}`} hint="0 = lowest volatility, 1 = highest">
+          <Field
+            label={`Risk tolerance ${risk.toFixed(2)}`}
+            hint="0 = lowest volatility, 1 = highest"
+          >
             <input
               type="range"
               min={0}
@@ -207,7 +246,10 @@ export function RunPage() {
 
           <Card>
             <dl className="grid stats" style={{ margin: 0 }}>
-              <Stat label="Backend" value={<span style={{ fontSize: 15 }}>{result.backend}</span>} />
+              <Stat
+                label="Backend"
+                value={<span style={{ fontSize: 15 }}>{result.backend}</span>}
+              />
               <Stat label="Tickers" value={result.tickers.length} />
               <Stat
                 label={`Selected at ${risk.toFixed(2)}`}
@@ -218,7 +260,14 @@ export function RunPage() {
                 value={num(performance.find((p) => p.strategy === selected)?.sharpe ?? null)}
               />
             </dl>
-            <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 10, marginBottom: 0 }}>
+            <p
+              style={{
+                color: "var(--text-muted)",
+                fontSize: 12,
+                marginTop: 10,
+                marginBottom: 0,
+              }}
+            >
               The slider re-picks along the volatility ranking without re-running anything — the
               same positional rule the service applies.
             </p>
@@ -229,17 +278,48 @@ export function RunPage() {
               title="Forecast quality"
               hint="MASE is the model's error divided by a random walk's. Below 1.0 beats doing nothing."
             >
-              {mase && <Chart option={mase} className={barChartClass(result.forecast_metrics.length)} label="MASE by ticker" />}
-              <Table rows={result.forecast_metrics} columns={metricColumns} rowKey={(m) => m.ticker} />
+              {mase && (
+                <Chart
+                  option={mase}
+                  className={barChartClass(result.forecast_metrics.length)}
+                  label="MASE by ticker"
+                />
+              )}
+              <Table
+                rows={result.forecast_metrics}
+                columns={metricColumns}
+                rowKey={(m) => m.ticker}
+              />
             </Card>
 
-            <Card title={`Weights · ${selected}`} hint="Rounded to the nearest basis point in the table.">
-              {weightsChart && <Chart option={weightsChart} className={barChartClass(result.tickers.length)} label={`weights for ${selected}`} />}
+            <Card
+              title={`Weights · ${selected}`}
+              hint="Rounded to the nearest basis point in the table."
+            >
+              {weightsChart && (
+                <Chart
+                  option={weightsChart}
+                  className={barChartClass(result.tickers.length)}
+                  label={`weights for ${selected}`}
+                />
+              )}
               <Table
-                rows={weightsFor(result.weights, selected).map(([ticker, weight]) => ({ ticker, weight }))}
+                rows={weightsFor(result.weights, selected).map(([ticker, weight]) => ({
+                  ticker,
+                  weight,
+                }))}
                 columns={[
-                  { key: "t", header: "Ticker", render: (r) => <span className="mono">{r.ticker}</span> },
-                  { key: "w", header: "Weight", num: true, render: (r) => pct(r.weight) },
+                  {
+                    key: "t",
+                    header: "Ticker",
+                    render: (r) => <span className="mono">{r.ticker}</span>,
+                  },
+                  {
+                    key: "w",
+                    header: "Weight",
+                    num: true,
+                    render: (r) => pct(r.weight),
+                  },
                 ]}
                 rowKey={(r) => r.ticker}
               />
@@ -262,14 +342,21 @@ export function RunPage() {
                   })
                 }
                 colorOf={(name) => `var(--series-${slotOf(name) + 1})`}
-                disabledWhen={() => (compare.length ? compare.length >= MAX_SERIES : shown.length >= MAX_SERIES)}
+                disabledWhen={() =>
+                  compare.length ? compare.length >= MAX_SERIES : shown.length >= MAX_SERIES
+                }
               />
             }
           >
-            {growth && <Chart option={growth} className="chart tall" label="cumulative growth by strategy" />}
+            {growth && (
+              <Chart option={growth} className="chart tall" label="cumulative growth by strategy" />
+            )}
           </Card>
 
-          <Card title="Strategy performance" hint="Sorted by Sharpe. The highlighted row is the current selection.">
+          <Card
+            title="Strategy performance"
+            hint="Sorted by Sharpe. The highlighted row is the current selection."
+          >
             <Table
               rows={[...performance].sort((a, b) => b.sharpe - a.sharpe)}
               columns={performanceColumns}

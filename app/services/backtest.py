@@ -62,7 +62,7 @@ def make_optimizer(
             )
             try:
                 frame, notes = optimization.optimize(window, [name], risk_free_rate, scoped)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- one strategy, not the run
                 messages.append(f"{name}: failed ({type(exc).__name__}: {exc})")
                 continue
             columns[name] = frame[name]

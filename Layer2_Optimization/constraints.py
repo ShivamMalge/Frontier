@@ -50,9 +50,7 @@ class Constraints:
         n = len(assets)
 
         if self.min_weight > self.max_weight:
-            problems.append(
-                f"min_weight {self.min_weight} exceeds max_weight {self.max_weight}"
-            )
+            problems.append(f"min_weight {self.min_weight} exceeds max_weight {self.max_weight}")
         if self.max_weight * n < 1.0 - 1e-9:
             problems.append(
                 f"max_weight {self.max_weight} across {n} assets caps the portfolio at "

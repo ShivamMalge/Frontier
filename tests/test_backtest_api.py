@@ -31,9 +31,7 @@ def submit(client, **overrides) -> dict:
 
 
 def test_submitted_backtest_returns_a_job(client):
-    response = client.post(
-        "/api/v1/backtest/runs", json={"tickers": TICKERS, **WINDOW, **FAST}
-    )
+    response = client.post("/api/v1/backtest/runs", json={"tickers": TICKERS, **WINDOW, **FAST})
     assert response.status_code == 202
     assert response.json()["state"] in {"queued", "running"}
     assert "Location" in response.headers
@@ -111,9 +109,7 @@ def test_turnover_budget_is_respected_at_every_rebalance(client):
 
 
 def test_constraints_are_applied_during_the_backtest(client):
-    result = submit(
-        client, strategies=["Markowitz_MinVar"], constraints={"max_weight": 0.35}
-    )
+    result = submit(client, strategies=["Markowitz_MinVar"], constraints={"max_weight": 0.35})
     assert result["results"][0]["rebalances"] >= 2
     assert not result["warnings"]
 
@@ -138,9 +134,9 @@ def test_a_backtest_is_not_the_same_as_an_in_sample_optimisation(client):
     backtest = submit(client, strategies=["Markowitz_MinVar"])
     backtest_sharpe = backtest["results"][0]["sharpe"]
 
-    returns = client.post(
-        "/api/v1/market/returns", json={"tickers": TICKERS, **WINDOW}
-    ).json()["returns"]
+    returns = client.post("/api/v1/market/returns", json={"tickers": TICKERS, **WINDOW}).json()[
+        "returns"
+    ]
     weights = client.post(
         "/api/v1/portfolio/optimize",
         json={"returns": returns, "strategies": ["Markowitz_MinVar"]},

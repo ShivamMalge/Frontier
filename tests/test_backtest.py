@@ -11,6 +11,8 @@ arithmetic checkable by hand.
 
 from __future__ import annotations
 
+from itertools import pairwise
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -28,9 +30,7 @@ ASSETS = list("ABCDE")
 def returns() -> pd.DataFrame:
     rng = np.random.default_rng(2)
     index = pd.bdate_range("2018-01-01", periods=800)
-    return pd.DataFrame(
-        rng.normal(0.0004, 0.012, (800, len(ASSETS))), index=index, columns=ASSETS
-    )
+    return pd.DataFrame(rng.normal(0.0004, 0.012, (800, len(ASSETS))), index=index, columns=ASSETS)
 
 
 def equal_weight(window: pd.DataFrame, previous: dict) -> tuple[pd.DataFrame, list[str]]:
@@ -50,7 +50,7 @@ class TestSchedule:
 
     def test_spacing_matches_the_request(self):
         schedule = rebalance_schedule(800, 252, 21)
-        assert all(b - a == 21 for a, b in zip(schedule, schedule[1:], strict=False))
+        assert all(b - a == 21 for a, b in pairwise(schedule))
 
     def test_no_schedule_when_history_is_too_short(self):
         assert rebalance_schedule(200, 252, 21) == []
@@ -149,9 +149,7 @@ class TestCosts:
     def test_costs_reduce_net_returns(self, returns):
         config = BacktestConfig(lookback=252, cost_bps=50.0)
         result = run_backtest(returns, equal_weight, config)
-        assert result.net_returns["EqualWeight"].sum() < result.gross_returns[
-            "EqualWeight"
-        ].sum()
+        assert result.net_returns["EqualWeight"].sum() < result.gross_returns["EqualWeight"].sum()
 
     def test_cost_equals_turnover_times_the_rate(self, returns):
         config = BacktestConfig(lookback=252, cost_bps=25.0)

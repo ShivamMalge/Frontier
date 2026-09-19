@@ -60,5 +60,5 @@ def _current_rq_job():
         return None
     try:
         return get_current_job()
-    except Exception:
+    except Exception:  # noqa: BLE001 -- progress is telemetry; never fail the work for it
         return None

@@ -69,7 +69,11 @@ describe("weightsFor", () => {
   });
 
   it("treats a null weight as zero rather than dropping the ticker", () => {
-    const ragged: Frame = { index: ["A", "B"], columns: ["X"], data: [[null], [0.4]] };
+    const ragged: Frame = {
+      index: ["A", "B"],
+      columns: ["X"],
+      data: [[null], [0.4]],
+    };
     expect(weightsFor(ragged, "X")).toEqual([
       ["B", 0.4],
       ["A", 0],

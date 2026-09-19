@@ -5,11 +5,12 @@
 Forecast equity prices, optimize portfolios across six strategies, and compare
 their risk-adjusted performance.
 
-**Migration status: Phases 1–9 of 10 complete**, plus walk-forward backtesting —
-FastAPI + Pydantic service layer, RQ + Redis job queue, PyTorch + LightGBM
-forecasting, cvxpy + Riskfolio-Lib optimizers, Polars data pipeline, Parquet +
-DuckDB price store, MLflow tracking, uv + Docker packaging, and a React +
-TypeScript front end with ECharts. See [Migration roadmap](#migration-roadmap).
+**Migration complete: all 10 phases**, plus walk-forward backtesting — FastAPI +
+Pydantic service layer, RQ + Redis job queue, PyTorch + LightGBM forecasting,
+cvxpy + Riskfolio-Lib optimizers, Polars data pipeline, Parquet + DuckDB price
+store, MLflow tracking, uv + Docker packaging, a React + TypeScript front end
+with ECharts, and CI that lints, tests, builds both images and drives the whole
+stack in a browser. See [Migration roadmap](#migration-roadmap).
 
 ---
 
@@ -49,7 +50,8 @@ uv run frontier --tickers AAPL MSFT JPM --backend naive
 Run the tests:
 
 ```bash
-uv run pytest
+uv run pytest                    # 321 tests
+uv run ruff check . && uv run ruff format --check .
 ```
 
 Run the front end (needs the API above on port 8000):
@@ -326,10 +328,12 @@ utils/                config, logging, filesystem helpers
 tests/                321 Python tests, no network access
                       frontend/src/**/*.test.ts: 21 more, in jsdom
 
-pyproject.toml        dependencies, extras, entry points, pytest config
-uv.lock               the resolved set, committed -- 202 packages
+pyproject.toml        dependencies, extras, entry points, pytest, ruff, coverage
+uv.lock               the resolved set, committed -- 211 packages
 Dockerfile            one image, two roles (API and worker)
 compose.yaml          UI + API + worker + Redis
+.github/workflows/ci.yml   lint, tests, image builds, browser end-to-end
+.pre-commit-config.yaml    ruff + biome on staged files (opt in per clone)
 main.py               shim so `python main.py` works without an install
 ```
 
@@ -624,7 +628,7 @@ Two files replace the old ad-hoc setup:
 
 | Was | Is now |
 |---|---|
-| `requirements.txt` — version *floors*, resolved fresh on every install | `pyproject.toml` + `uv.lock` — 202 packages pinned with hashes |
+| `requirements.txt` — version *floors*, resolved fresh on every install | `pyproject.toml` + `uv.lock` — 211 packages pinned with hashes |
 | `pytest.ini` | `[tool.pytest.ini_options]` in `pyproject.toml` |
 
 Four dependency sets, so a deployment installs what it will actually run:
@@ -787,9 +791,102 @@ hook, a page that renders nothing when the API is down.
 
 ---
 
+## Quality
+
+Nothing below is advice: CI runs all of it on every push, and the badge-less
+truth is that a red build blocks nothing but your own confidence — this is a
+single-maintainer repo, so the gates exist to catch what review misses.
+
+```bash
+uv run ruff check .        # lint
+uv run ruff format .       # format
+uv run pytest --cov        # 321 tests, coverage floor 84%
+cd frontend
+npm run lint               # biome: lint + format, one tool
+npm run typecheck          # tsc
+npm test                   # 21 jsdom tests
+npm run test:e2e           # 4 Playwright tests against a running stack
+```
+
+### One linter per language, with reasons in the config
+
+`ruff` for Python, `biome` for TypeScript. Both lint *and* format, so style is
+never a review topic. The rule sets are explicit rather than inherited: a
+default set that changes under you is how a clean build turns red on an upgrade
+you did not make.
+
+Four rules are switched off, each with its reason in `pyproject.toml` — imports
+inside functions (`app/tasks.py` defers heavy imports so a worker pays for them
+only when it runs that task), magic-value comparisons (`assert mase > 0.9` is
+what a numerical test looks like), argument counts (a backtest genuinely takes
+eight parameters), and one that fights the formatter. Everything else is on.
+
+The interesting category is the 12 blind `except Exception` handlers, which are
+load-bearing: one ticker that will not train must not sink a request, one
+strategy that fails must not drop the other nine, and tracking must never fail
+the work it is recording. Each now carries a `# noqa: BLE001` naming that
+reason, so the rule keeps working on new code while the deliberate ones are
+documented where they sit.
+
+### The front end is linted by Biome, not ESLint
+
+`typescript-eslint`'s peer range stops at TypeScript 6 and this project is on 7,
+so ESLint cannot parse what actually compiles. Biome does not depend on the
+TypeScript package at all. Its hooks rule immediately paid for itself: Phase 9
+left two `eslint-disable` comments for a linter that was never installed, and
+both were hiding real dependency-array bugs — `slotOf` was recreated every
+render and silently excluded from two memos. It is a `useCallback` now.
+
+The generated `src/api/schema.ts` is excluded from both lint and format: it is
+regenerated from the API's OpenAPI schema, and any edit would be undone.
+
+### Coverage, and what it does not say
+
+85.9% under branch coverage, floor at 84. `app/worker.py` reads 0% and is left
+in the measurement anyway — `tests/test_worker_process.py` runs it as a real
+subprocess, which coverage does not follow, and omitting it would raise the
+number without covering a line.
+
+### What CI actually checks
+
+| Job | Catches |
+|---|---|
+| `python` | lint, format, 321 tests, the coverage floor |
+| `frontend` | biome, `tsc`, 21 unit tests, a production build |
+| `types-are-current` | a Pydantic model changed without regenerating the front end's types — which would otherwise fail in a browser, not a build |
+| `images` | both Dockerfiles build, the stack comes up healthy, `/health` reports the Redis backend |
+| `e2e` | Playwright drives a real browser through nginx → API → Redis → worker: it submits a pipeline run, waits for the worker to finish it, and asserts a canvas was painted and the numbers rendered |
+
+`SO_MARKET_DATA_SOURCE=synthetic` throughout: CI must never depend on yfinance,
+which rate-limits and restates history.
+
+Writing these found two real defects. The e2e suite caught the first on its
+first run: Portfolio and Backtest disabled their run button below two tickers
+without saying why, while Run explained itself — a dead control with no
+explanation. Both pages say it now.
+
+The second is worse and would have shipped. `proxy_pass http://api:8000`
+resolves the upstream **once, at startup**, so recreating the API container left
+the UI serving 502 until nginx was restarted too — a restart, a redeploy, or a
+`compose up` after an image change, all of which are routine. nginx now
+re-resolves through Docker's DNS per request, and the `images` job restarts the
+API and re-checks the UI so the bug cannot come back.
+
+### Hooks
+
+`uv run pre-commit install` once per clone gets ruff and biome with `--fix` on
+staged files, plus the usual merge-conflict and large-file checks — the last of
+which exists because a 361 MB virtualenv was once committed to this repo.
+Everything the hooks do, CI does again; skipping a hook costs a CI run, not
+correctness.
+
+---
+
 ## Known limitations
 
-Carried forward deliberately, each scheduled to a later phase:
+The migration is finished, so nothing here is waiting on a later phase. These
+are the things this project does not do, written down so the next person does
+not have to discover them:
 
 - **`POST /portfolio/optimize` and `POST /pipeline/runs` are in-sample.** They fit
   weights on the window they report on, which is useful for inspecting a single
@@ -838,17 +935,25 @@ Carried forward deliberately, each scheduled to a later phase:
   `risk_parity.py`, `gmv.py`, `hrp.py` and `gerber.py` are no longer called by
   anything. They are kept because their tests encode the defects found during the
   audit; delete them when that history stops being useful.
-- **The front end has no end-to-end test.** The 21 jsdom tests mount pages
-  against a stubbed API; nothing drives a real browser against a real service on
-  every change. The pages were verified by hand in headless Chrome — which is
-  how the colour collision and two label overlaps were found — but that check
-  does not run in CI. Phase 10.
+- **The end-to-end suite is four tests, on one browser.** Chromium only, and it
+  covers the pipeline path — submit, wait for the worker, read the numbers —
+  plus a deep link and a guard. Forecast, Data and Tracking are not driven in a
+  browser by anything, and no test looks at a rendered chart's *content*: a
+  canvas with the wrong line on it passes.
 - **The bundle is 900 kB** (295 kB gzipped), 596 kB of it ECharts. It is split
   into its own chunk so it caches independently, but nothing is lazy-loaded by
   route: opening Tracking still pays for the chart library.
 - **`/data/query` results are rendered as text.** Every column is right-aligned
   and stringified, because the API returns untyped SQL rows. Fine for the
   aggregate queries it is meant for; not a spreadsheet.
+- **The lint rule set is a judgement call.** Four rule families are off, with
+  reasons in `pyproject.toml`, and 12 blind excepts carry per-line suppressions.
+  A stricter reading of any of them is defensible; what is not defensible is
+  turning a rule off silently, which is why each has a comment.
+- **Coverage measures lines, not behaviour.** 85.9% with a floor at 84 says the
+  tests execute most of the code. It says nothing about whether the assertions
+  are the right ones, and the number would barely move if half of them were
+  deleted.
 - **The risk-tolerance slider re-selects client-side.** It re-picks along the
   volatility ranking with the same positional rule the service uses, so moving
   it never re-runs anything — but it is a second implementation of that rule,
@@ -858,11 +963,11 @@ Carried forward deliberately, each scheduled to a later phase:
   still sitting in the working directory: `rm -rf venv/` when you want the disk
   back. It contains only numpy, pandas and streamlit — not TensorFlow, scipy,
   scikit-learn or yfinance — so it could never have run this project.
-- **No CI builds the images.** Both were built and run end to end by hand — API
-  healthy, worker executing a queued pipeline run, `keras_lstm` correctly absent
-  from `/health`, the UI served by nginx and driving a job through it — but
-  nothing re-checks that on a change, so a break would surface on somebody's
-  next `docker compose up`. CI is Phase 10.
+- **CI has never run.** The workflow is written and every step was executed
+  locally — `uv sync --locked`, ruff, 321 tests against the coverage floor,
+  biome, `tsc`, 21 unit tests, both image builds, the stack coming up healthy,
+  and the four Playwright tests against it — but GitHub has not run it once, so
+  the YAML itself is unproven. The first push is the test.
 - **The API image is 3.9 GB.** See [Packaging](#packaging) for where it goes.
   Most of it is inherited from `riskfolio-lib`'s dependency tree and the torch
   wheel, so trimming it means dropping capability, not tidying. The UI image is
@@ -911,4 +1016,4 @@ Phase 6 adds a `parquet` source alongside it.
 | 7 | Tracking | MLflow | **done** |
 | 8 | Packaging | uv + pyproject.toml + Docker | **done** |
 | 9 | Frontend | React + TypeScript + Vite, ECharts | **done** |
-| 10 | Quality | pytest + ruff + git | next |
+| 10 | Quality | pytest + ruff + git | **done** |

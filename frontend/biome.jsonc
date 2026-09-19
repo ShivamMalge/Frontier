@@ -1,0 +1,52 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  // Biome, not ESLint: typescript-eslint's peer range stops at TypeScript 6 and
+  // this project is on 7, so ESLint cannot parse what we actually compile.
+  // Biome does not depend on the TypeScript package at all. It is to the front
+  // end what ruff is to the Python side: one fast tool, lint and format in one
+  // config, enforced the same way in CI and in the pre-commit hook.
+  "files": {
+    // schema.ts is generated from the OpenAPI schema by
+    // scripts/gen_api_types.py; linting or reformatting it would just be
+    // undone on the next generation.
+    "includes": ["src/**/*.ts", "src/**/*.tsx", "*.ts", "*.json", "!src/api/schema.ts"],
+    "ignoreUnknown": true
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    // Matches ruff's 100 on the Python side.
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        // The React hooks rule. Phase 9 left two suppression comments written
+        // for ESLint; this is the tool that actually enforces the rule.
+        "useExhaustiveDependencies": "warn",
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error"
+      },
+      "suspicious": {
+        // `any` in a typed client defeats the generated schema.
+        "noExplicitAny": "error",
+        "noConsole": { "level": "error", "options": { "allow": ["warn", "error"] } }
+      },
+      "style": {
+        "noNonNullAssertion": "error",
+        "useConst": "error"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } }
+}

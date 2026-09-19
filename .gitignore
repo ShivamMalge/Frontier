@@ -25,6 +25,14 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 npm-debug.log*
+frontend/test-results/
+frontend/playwright-report/
+
+# Test and lint artefacts
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 
 # Editors / OS
 .vscode/

@@ -1,0 +1,41 @@
+# Install once per clone:  uv run pre-commit install
+#
+# Deliberately small. These hooks fix what a machine can fix and stay out of the
+# way otherwise -- the full suite belongs in CI, not in every commit. Everything
+# here is also enforced by .github/workflows/ci.yml, so a skipped hook costs a
+# CI run, not correctness.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.8
+    hooks:
+      - id: ruff
+        name: ruff (lint, autofix)
+        args: [--fix]
+      - id: ruff-format
+        name: ruff (format)
+
+  # Run where the config lives. Biome's own hook invokes it from the repo root,
+  # which makes it hunt for a config it cannot find; and checking all of src/
+  # costs 30ms, so there is nothing to gain from passing file names.
+  - repo: local
+    hooks:
+      - id: biome
+        name: biome (front end)
+        language: system
+        entry: bash -c 'cd frontend && npx --no-install biome check --write src'
+        files: ^frontend/(src|biome\.jsonc|package\.json)
+        pass_filenames: false
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+        exclude: ^\.github/workflows/  # uses GitHub's own expression syntax
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+        # The 361 MB venv/ that used to be committed is exactly what this stops.
+        args: [--maxkb=2048]

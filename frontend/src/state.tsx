@@ -5,8 +5,9 @@
  * picking six tickers on Run and then opening Forecast should not mean picking
  * them again. They persist to localStorage so a reload keeps them too.
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+
 import type { ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "./api/client";
 import type {
   BackendInfo,
@@ -107,23 +108,20 @@ export function MetaProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const toggleTicker = useCallback(
-    (ticker: string) => {
-      setParamsState((current) => {
-        const tickers = current.tickers.includes(ticker)
-          ? current.tickers.filter((t) => t !== ticker)
-          : [...current.tickers, ticker];
-        const next = { ...current, tickers };
-        try {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-        } catch {
-          /* ignore */
-        }
-        return next;
-      });
-    },
-    [],
-  );
+  const toggleTicker = useCallback((ticker: string) => {
+    setParamsState((current) => {
+      const tickers = current.tickers.includes(ticker)
+        ? current.tickers.filter((t) => t !== ticker)
+        : [...current.tickers, ticker];
+      const next = { ...current, tickers };
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
 
   const value = useMemo(
     () => ({

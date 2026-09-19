@@ -1,0 +1,220 @@
+# Everything a reviewer would otherwise have to take on trust.
+#
+# Four jobs, cheapest first: `python` and `frontend` run in parallel and cover
+# lint plus unit tests; `images` builds both containers and brings the stack up;
+# `e2e` drives a real browser against that stack, which is the only check that
+# exercises browser -> nginx -> API -> Redis -> worker.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push makes an in-flight run for the same ref pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Never hit yfinance from CI: it rate-limits, restates history, and would make
+  # the suite fail for reasons that have nothing to do with the change.
+  SO_MARKET_DATA_SOURCE: synthetic
+
+jobs:
+  python:
+    name: ruff + pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # --locked, not --frozen: a lockfile that no longer matches pyproject.toml
+      # is itself a failure, not something to resolve around.
+      - run: uv sync --locked --all-extras
+
+      - name: Lint
+        run: uv run ruff check --output-format=github .
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      - name: Tests
+        # The coverage floor lives in pyproject.toml.
+        run: uv run pytest --cov --cov-report=term-missing
+
+  frontend:
+    name: biome + tsc + vitest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint and format
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npx vite build
+
+  types-are-current:
+    name: generated types match the API
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - run: uv sync --locked
+
+      # If this diff is non-empty, someone changed a Pydantic model without
+      # regenerating the front end's contract -- which would fail in a browser
+      # rather than in a build.
+      - name: Regenerate and diff
+        run: |
+          uv run python scripts/gen_api_types.py
+          git diff --exit-code frontend/src/api/schema.ts
+
+  images:
+    name: docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build both images and start the stack
+        run: docker compose build
+
+      - name: Bring it up
+        run: docker compose up -d
+
+      - name: Wait for health
+        run: |
+          for _ in $(seq 1 60); do
+            state=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q api)" 2>/dev/null || echo starting)
+            ui=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q frontend)" 2>/dev/null || echo starting)
+            [ "$state" = healthy ] && [ "$ui" = healthy ] && exit 0
+            sleep 5
+          done
+          echo "the stack never became healthy"
+          docker compose logs --tail 80
+          exit 1
+
+      - name: The API reports the backends it actually has
+        run: |
+          curl -fsS http://127.0.0.1:8080/health | tee /dev/stderr | grep -q '"job_backend":"redis"'
+
+      # nginx caches an upstream's address when proxy_pass names it literally,
+      # so recreating the API container used to leave the UI serving 502 until
+      # nginx was restarted too. This is that bug, pinned.
+      - name: The UI survives an API restart
+        run: |
+          docker compose restart api
+          for _ in $(seq 1 24); do
+            curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1 && exit 0
+            sleep 5
+          done
+          echo "the UI did not recover after the API restarted"
+          docker compose logs --tail 60 frontend api
+          exit 1
+
+      - name: Save the images for the e2e job
+        run: |
+          docker save frontier:local frontier-ui:local | gzip > /tmp/images.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: images
+          path: /tmp/images.tar.gz
+          retention-days: 1
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail 200
+
+  e2e:
+    name: playwright
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: images
+          path: /tmp
+
+      - name: Load the images built upstream
+        run: gunzip -c /tmp/images.tar.gz | docker load
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+        working-directory: frontend
+
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Start the stack
+        run: docker compose up -d
+
+      - name: Wait for the UI
+        run: |
+          for _ in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1 && exit 0
+            sleep 5
+          done
+          docker compose logs --tail 80
+          exit 1
+
+      - name: End-to-end
+        run: npm run test:e2e
+        working-directory: frontend
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            frontend/test-results/
+          retention-days: 7
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail 200

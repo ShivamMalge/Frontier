@@ -7,9 +7,7 @@ from __future__ import annotations
 import pandas as pd
 
 
-def build_portfolio_returns(
-    returns_df: pd.DataFrame, weights_df: pd.DataFrame
-) -> pd.DataFrame:
+def build_portfolio_returns(returns_df: pd.DataFrame, weights_df: pd.DataFrame) -> pd.DataFrame:
     """One portfolio return series per column of ``weights_df``.
 
     ``weights_df`` is indexed by ticker; ``returns_df`` has one column per ticker.

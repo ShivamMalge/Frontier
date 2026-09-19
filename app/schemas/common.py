@@ -85,7 +85,6 @@ class Frame(BaseModel):
             data=[[_finite(value) for value in row] for row in frame.to_numpy().tolist()],
         )
 
-
     @classmethod
     def from_polars(cls, frame: object, index_column: str = "date") -> Frame:
         """Build from a ``polars.DataFrame`` whose row labels live in a column.
@@ -104,10 +103,7 @@ class Frame(BaseModel):
         return cls(
             index=[_as_label(value) for value in frame[index_column].to_list()],
             columns=columns,
-            data=[
-                [_finite(value) for value in row]
-                for row in frame.select(columns).iter_rows()
-            ],
+            data=[[_finite(value) for value in row] for row in frame.select(columns).iter_rows()],
         )
 
 

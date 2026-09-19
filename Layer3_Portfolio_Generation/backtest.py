@@ -45,9 +45,7 @@ logger = logging.getLogger(__name__)
 #: Returns a tickers x strategies frame plus any warnings. Injected rather than
 #: imported so Layer 3 stays independent of Layer 2's dispatch, and so tests can
 #: drive the engine with a trivial allocator.
-Optimizer = Callable[
-    [pd.DataFrame, dict[str, dict[str, float]]], "tuple[pd.DataFrame, list[str]]"
-]
+Optimizer = Callable[[pd.DataFrame, dict[str, dict[str, float]]], "tuple[pd.DataFrame, list[str]]"]
 
 
 @dataclass(frozen=True)
@@ -96,12 +94,8 @@ class BacktestResult:
 
         rows = {}
         for strategy in self.net_returns.columns:
-            turnover = (
-                float(self.turnover[strategy].mean()) if strategy in self.turnover else 0.0
-            )
-            total_cost = (
-                float(self.costs[strategy].sum()) if strategy in self.costs else 0.0
-            )
+            turnover = float(self.turnover[strategy].mean()) if strategy in self.turnover else 0.0
+            total_cost = float(self.costs[strategy].sum()) if strategy in self.costs else 0.0
             rows[strategy] = {
                 "Annual Return": net.loc[strategy, "Annual Return"],
                 "Annual Vol": net.loc[strategy, "Annual Vol"],
@@ -136,7 +130,7 @@ def rebalance_schedule(n_observations: int, lookback: int, every: int) -> list[i
     return list(range(lookback, n_observations, max(1, every)))
 
 
-def run_backtest(
+def run_backtest(  # noqa: PLR0912, PLR0915 -- one sequential walk; splitting it scatters the state
     returns: pd.DataFrame,
     optimizer: Optimizer,
     config: BacktestConfig = DEFAULT_CONFIG,
@@ -154,8 +148,7 @@ def run_backtest(
 
     if not schedule:
         raise ValueError(
-            f"need more than lookback={config.lookback} observations to backtest, "
-            f"got {len(clean)}"
+            f"need more than lookback={config.lookback} observations to backtest, got {len(clean)}"
         )
     if len(assets) < 2:
         raise ValueError(f"need at least 2 assets to backtest, got {len(assets)}")
@@ -186,12 +179,11 @@ def run_backtest(
         # One call per rebalance. Every strategy's drifted weights go in together so
         # the adapter can batch, or loop per strategy when turnover limits apply.
         previous = {
-            name: dict(zip(assets, weights.tolist(), strict=True))
-            for name, weights in held.items()
+            name: dict(zip(assets, weights.tolist(), strict=True)) for name, weights in held.items()
         }
         try:
             frame, notes = optimizer(window, previous)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- a failed re-optimisation holds the previous weights
             warnings.append(
                 f"{when.date()}: optimizer failed ({type(exc).__name__}: {exc}); "
                 "holding existing weights"
@@ -241,9 +233,7 @@ def run_backtest(
     return BacktestResult(
         net_returns=pd.DataFrame(net, index=span),
         gross_returns=pd.DataFrame(gross, index=span),
-        weights={
-            name: pd.DataFrame(history, index=assets).T for name, history in targets.items()
-        },
+        weights={name: pd.DataFrame(history, index=assets).T for name, history in targets.items()},
         turnover=pd.DataFrame(turnovers),
         costs=pd.DataFrame(charges),
         rebalance_dates=rebalance_dates,

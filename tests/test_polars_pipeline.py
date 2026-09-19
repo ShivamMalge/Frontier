@@ -61,9 +61,7 @@ class TestConversions:
     def test_wide_to_long_and_back(self, wide):
         restored = long_to_wide(wide_to_long(wide))
         assert restored.columns == wide.columns
-        assert restored.select(TICKERS).to_numpy() == pytest.approx(
-            wide.select(TICKERS).to_numpy()
-        )
+        assert restored.select(TICKERS).to_numpy() == pytest.approx(wide.select(TICKERS).to_numpy())
 
     def test_long_format_has_one_row_per_date_and_ticker(self, wide, long):
         assert long.columns == ["date", "ticker", "price"]
@@ -140,9 +138,7 @@ class TestReturns:
         produced = compute_returns_polars(wide)
 
         assert produced.height == len(expected)
-        assert produced.drop("date").to_numpy() == pytest.approx(
-            expected.to_numpy(), abs=1e-12
-        )
+        assert produced.drop("date").to_numpy() == pytest.approx(expected.to_numpy(), abs=1e-12)
 
     def test_long_returns_are_grouped_per_ticker(self, long):
         result = compute_returns_long(long)
@@ -157,9 +153,7 @@ class TestReturns:
         for ticker in TICKERS:
             expected = wide_returns[ticker].to_numpy()
             actual = (
-                long_returns.filter(pl.col("ticker") == ticker)
-                .sort("date")["return"]
-                .to_numpy()
+                long_returns.filter(pl.col("ticker") == ticker).sort("date")["return"].to_numpy()
             )
             assert actual == pytest.approx(expected, abs=1e-12)
 
@@ -182,9 +176,7 @@ class TestFrameFromPolars:
         assert Frame.from_polars(frame).data == [[1.0, None], [None, 2.0]]
 
     def test_agrees_with_from_pandas(self, pandas_prices, wide):
-        assert Frame.from_polars(wide).model_dump() == Frame.from_pandas(
-            pandas_prices
-        ).model_dump()
+        assert Frame.from_polars(wide).model_dump() == Frame.from_pandas(pandas_prices).model_dump()
 
     def test_missing_index_column_is_rejected(self, wide):
         with pytest.raises(ValueError, match="index column"):

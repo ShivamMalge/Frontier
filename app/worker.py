@@ -26,9 +26,7 @@ logger = logging.getLogger("app.worker")
 
 def build_parser() -> argparse.ArgumentParser:
     settings = get_settings()
-    parser = argparse.ArgumentParser(
-        prog="frontier-worker", description="Run an RQ worker."
-    )
+    parser = argparse.ArgumentParser(prog="frontier-worker", description="Run an RQ worker.")
     parser.add_argument("--queues", nargs="+", default=[settings.queue_name])
     parser.add_argument("--url", default=settings.redis_url)
     parser.add_argument(
@@ -36,22 +34,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Process what is queued, then exit instead of waiting for more.",
     )
-    parser.add_argument(
-        "--name", default=None, help="Worker name; defaults to host.pid."
-    )
+    parser.add_argument("--name", default=None, help="Worker name; defaults to host.pid.")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     args = build_parser().parse_args(argv)
 
     try:
         connection = Redis.from_url(args.url)
         connection.ping()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- any failure here means the same thing: no broker
         logger.error("cannot reach Redis at %s: %s", args.url, exc)
         logger.error("start one with: docker run -p 6379:6379 redis:7-alpine")
         return 1

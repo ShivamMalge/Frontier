@@ -147,9 +147,7 @@ def train_model(
         with torch.no_grad():
             val_loss = float(loss_fn(model(x_val), y_val)) if len(y_val) else float("nan")
 
-        history.append(
-            {"epoch": epoch, "train_loss": running / max(seen, 1), "val_loss": val_loss}
-        )
+        history.append({"epoch": epoch, "train_loss": running / max(seen, 1), "val_loss": val_loss})
 
         if np.isfinite(val_loss) and val_loss < best_loss - 1e-9:
             best_loss, stale = val_loss, 0
@@ -223,7 +221,7 @@ def forecast_universe(
             model, history = train_model(split.x_train, split.y_train, config, label=ticker)
             config.history = history
             forecasts.append(_to_forecast(model, split, config))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- a ticker that will not train is reported, not fatal
             failures.append((ticker, f"{type(exc).__name__}: {exc}"))
 
     return forecasts, failures

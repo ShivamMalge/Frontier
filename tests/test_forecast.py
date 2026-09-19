@@ -72,9 +72,7 @@ def test_failed_ticker_does_not_sink_the_request(client, monkeypatch, window):
             raise ValueError("synthetic failure")
         return spec.fn(series, params)
 
-    monkeypatch.setitem(
-        forecasting._REGISTRY, "naive", dataclasses.replace(spec, fn=flaky)
-    )
+    monkeypatch.setitem(forecasting._REGISTRY, "naive", dataclasses.replace(spec, fn=flaky))
 
     body = client.post(
         "/api/v1/forecast",

@@ -32,12 +32,8 @@ class TrackingStatus(BaseModel):
     experiment: str | None = None
     #: Present only when the store is reachable.
     run_count: int | None = None
-    ui_command: str | None = Field(
-        default=None, description="How to browse these runs locally."
-    )
-    detail: str | None = Field(
-        default=None, description="Why tracking is unavailable, when it is."
-    )
+    ui_command: str | None = Field(default=None, description="How to browse these runs locally.")
+    detail: str | None = Field(default=None, description="Why tracking is unavailable, when it is.")
 
 
 class TrackedRunList(BaseModel):

@@ -97,9 +97,7 @@ def main(argv: list[str] | None = None) -> int:
 
     log("")
     log(f"Selected for risk tolerance {args.risk_tolerance:.2f}: {result.selected_strategy}")
-    for ticker, weight in sorted(
-        result.selected_weights.items(), key=lambda kv: -kv[1]
-    ):
+    for ticker, weight in sorted(result.selected_weights.items(), key=lambda kv: -kv[1]):
         if weight > 1e-4:
             log(f"  {ticker:6s} {weight:7.2%}")
 

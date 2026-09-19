@@ -5,16 +5,31 @@ Framework-free on purpose: the numerical core (Layer*) imports this module, and
 """
 
 TECH_LIST = [
-    'AAPL', 'GOOG', 'MSFT', 'ADBE', 'INTC', 'AMD',
-    'LMT', 'NOC', 'BA', 'PFE', 'MRK', 'JNJ',
-    'JPM', 'GS', 'MS', 'BLK', 'C', 'WFC'
+    "AAPL",
+    "GOOG",
+    "MSFT",
+    "ADBE",
+    "INTC",
+    "AMD",
+    "LMT",
+    "NOC",
+    "BA",
+    "PFE",
+    "MRK",
+    "JNJ",
+    "JPM",
+    "GS",
+    "MS",
+    "BLK",
+    "C",
+    "WFC",
 ]
 
 START_DATE = "2010-01-01"
 END_DATE = "2024-01-01"
 
-RISK_FREE_RATE = 0.0      # annualised, as a decimal (0.04 == 4%)
-LOOKBACK_WINDOW = 60      # LSTM sequence length
+RISK_FREE_RATE = 0.0  # annualised, as a decimal (0.04 == 4%)
+LOOKBACK_WINDOW = 60  # LSTM sequence length
 TRAIN_SPLIT = 2 / 3
 LSTM_EPOCHS = 10
 LSTM_BATCH_SIZE = 64

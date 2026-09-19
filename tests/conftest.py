@@ -35,7 +35,7 @@ def synthetic_prices(tickers: list[str], periods: int = 900, seed: int = 11) -> 
 
 @pytest.fixture(autouse=True)
 def _stub_market_data(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_download(tickers, start, end):  # noqa: ARG001 - signature match
+    def fake_download(tickers, start, end):
         known = [t for t in tickers if t in TICKERS]
         if not known:
             return pd.DataFrame()

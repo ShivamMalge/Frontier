@@ -28,9 +28,9 @@ if (!globalThis.ResizeObserver) {
   } as unknown as typeof ResizeObserver;
 }
 
+import { cleanup } from "@testing-library/react";
 // With `globals: false`, testing-library does not register its own cleanup, so
 // a second render would otherwise find the first one's DOM still mounted.
 import { afterEach } from "vitest";
-import { cleanup } from "@testing-library/react";
 
 afterEach(cleanup);

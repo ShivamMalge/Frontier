@@ -60,10 +60,7 @@ def _return_lags(lags: int) -> list[pl.Expr]:
 
 def _volatility() -> list[pl.Expr]:
     return [
-        pl.col(_RETURN)
-        .rolling_std(window_size=window, ddof=1)
-        .over(TICKER)
-        .alias(f"vol_{window}")
+        pl.col(_RETURN).rolling_std(window_size=window, ddof=1).over(TICKER).alias(f"vol_{window}")
         for window in (SHORT_WINDOW, MEDIUM_WINDOW, LONG_WINDOW)
     ]
 
@@ -77,9 +74,9 @@ def _momentum() -> list[pl.Expr]:
 
 def _moving_average_gap() -> list[pl.Expr]:
     return [
-        (
-            pl.col(PRICE) / pl.col(PRICE).rolling_mean(window_size=window).over(TICKER) - 1.0
-        ).alias(f"ma_gap_{window}")
+        (pl.col(PRICE) / pl.col(PRICE).rolling_mean(window_size=window).over(TICKER) - 1.0).alias(
+            f"ma_gap_{window}"
+        )
         for window in (MEDIUM_WINDOW, LONG_WINDOW)
     ]
 
@@ -97,10 +94,7 @@ def _rsi(window: int = 14) -> pl.Expr:
     adjustment, which is what ``adjust=False`` selects.
     """
     gain = (
-        pl.col(_DELTA)
-        .clip(lower_bound=0.0)
-        .ewm_mean(alpha=1.0 / window, adjust=False)
-        .over(TICKER)
+        pl.col(_DELTA).clip(lower_bound=0.0).ewm_mean(alpha=1.0 / window, adjust=False).over(TICKER)
     )
     loss = (
         (-pl.col(_DELTA).clip(upper_bound=0.0))
@@ -142,10 +136,7 @@ def build_features_lazy(prices: pl.LazyFrame, lags: int = 10) -> pl.LazyFrame:
         .with_columns(
             # JSON has no infinity, and a zero-width range or moving average yields it.
             [
-                pl.when(pl.col(name).is_infinite())
-                .then(None)
-                .otherwise(pl.col(name))
-                .alias(name)
+                pl.when(pl.col(name).is_infinite()).then(None).otherwise(pl.col(name)).alias(name)
                 for name in feature_names(lags)
             ]
         )

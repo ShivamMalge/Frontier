@@ -205,7 +205,5 @@ def _validated(returns: pd.DataFrame) -> pd.DataFrame:
             f"need at least 2 complete return observations, got {clean.shape[0]}"
         )
     if clean.shape[1] < 2:
-        raise InsufficientDataError(
-            f"need at least 2 assets to optimize, got {clean.shape[1]}"
-        )
+        raise InsufficientDataError(f"need at least 2 assets to optimize, got {clean.shape[1]}")
     return clean

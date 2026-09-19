@@ -82,9 +82,7 @@ class TestIdempotence:
         store.write(ohlcv(TICKERS, "2020-01-01", "2020-06-01"), dt.datetime(2026, 1, 1, 9))
         before = store.read().height
 
-        report = store.write(
-            ohlcv(TICKERS, "2020-01-01", "2020-09-01"), dt.datetime(2026, 1, 2, 9)
-        )
+        report = store.write(ohlcv(TICKERS, "2020-01-01", "2020-09-01"), dt.datetime(2026, 1, 2, 9))
         assert report.rows_revised == 0
         assert report.rows_added > 0
         assert store.read().height == before + report.rows_added
@@ -181,9 +179,7 @@ class TestDuckDbQueries:
     def test_gaps_finds_a_hole_and_ignores_weekends(self, store):
         frame = ohlcv(["AAA"], "2020-01-01", "2020-06-01")
         # Remove a fortnight.
-        holed = frame.filter(
-            ~pl.col("date").is_between(dt.date(2020, 3, 2), dt.date(2020, 3, 16))
-        )
+        holed = frame.filter(~pl.col("date").is_between(dt.date(2020, 3, 2), dt.date(2020, 3, 16)))
         store.write(holed, dt.datetime(2026, 1, 1, 9))
 
         gaps = store.gaps(max_gap_days=5)

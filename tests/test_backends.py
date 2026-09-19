@@ -24,9 +24,7 @@ from Layer1_Preprocessing.synthetic import synthetic_prices
 TICKERS = ["AAA", "BBB", "CCC"]
 
 #: Fast settings: these tests check correctness and wiring, not convergence.
-FAST = ForecastParams(
-    lookback_window=20, train_split=2 / 3, epochs=2, batch_size=128, lags=5
-)
+FAST = ForecastParams(lookback_window=20, train_split=2 / 3, epochs=2, batch_size=128, lags=5)
 
 
 @pytest.fixture
@@ -58,9 +56,7 @@ class TestEveryBackend:
         assert outcome.tickers == TICKERS
         assert not outcome.failures
 
-    def test_predicted_prices_are_price_scale_and_returns_are_return_scale(
-        self, prices, backend
-    ):
+    def test_predicted_prices_are_price_scale_and_returns_are_return_scale(self, prices, backend):
         """Guards the Phase 1 bug: the two must not be confused."""
         outcome = run_forecast(prices, backend, FAST)
 
@@ -93,7 +89,8 @@ class TestEveryBackend:
     def test_progress_is_reported_and_monotonic(self, prices, backend):
         seen: list[float] = []
         run_forecast(prices, backend, FAST, lambda f, _m: seen.append(f))
-        assert seen and seen[-1] == 1.0
+        assert seen, "the backend reported no progress at all"
+        assert seen[-1] == 1.0
         assert seen == sorted(seen)
 
 
@@ -121,8 +118,12 @@ class TestMultiSeries:
     @pytest.mark.parametrize("backend", ["torch_lstm", "lightgbm"])
     def test_one_model_still_forecasts_every_ticker(self, prices, backend):
         params = ForecastParams(
-            lookback_window=20, train_split=2 / 3, epochs=2, batch_size=128,
-            lags=5, multi_series=True,
+            lookback_window=20,
+            train_split=2 / 3,
+            epochs=2,
+            batch_size=128,
+            lags=5,
+            multi_series=True,
         )
         outcome = run_forecast(prices, backend, params)
         assert outcome.tickers == TICKERS
@@ -157,8 +158,12 @@ class TestMultiSeries:
         def run(multi: bool) -> int:
             calls.clear()
             params = ForecastParams(
-                lookback_window=20, train_split=2 / 3, epochs=2, batch_size=128,
-                lags=5, multi_series=multi,
+                lookback_window=20,
+                train_split=2 / 3,
+                epochs=2,
+                batch_size=128,
+                lags=5,
+                multi_series=multi,
             )
             run_forecast(prices, backend, params)
             return len(calls)
@@ -169,9 +174,7 @@ class TestMultiSeries:
 
 class TestTargets:
     @pytest.mark.parametrize("backend", ["torch_lstm", "lightgbm"])
-    def test_price_target_is_far_worse_once_the_scaler_cannot_see_the_future(
-        self, prices, backend
-    ):
+    def test_price_target_is_far_worse_once_the_scaler_cannot_see_the_future(self, prices, backend):
         """Why the default target is `return`, demonstrated rather than asserted.
 
         A price-level target requires extrapolating beyond the training range. With
@@ -183,8 +186,12 @@ class TestTargets:
 
         def run(target: str):
             params = ForecastParams(
-                lookback_window=20, train_split=2 / 3, epochs=3, batch_size=128,
-                lags=5, target=target,
+                lookback_window=20,
+                train_split=2 / 3,
+                epochs=3,
+                batch_size=128,
+                lags=5,
+                target=target,
             )
             return run_forecast(prices, backend, params).metrics()[0]
 

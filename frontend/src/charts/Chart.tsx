@@ -4,8 +4,7 @@
  * Only the chart types actually used are imported: pulling `echarts` whole adds
  * roughly a megabyte of chart types this app never draws.
  */
-import { useEffect, useRef } from "react";
-import * as echarts from "echarts/core";
+
 import { BarChart, LineChart, ScatterChart } from "echarts/charts";
 import {
   DataZoomComponent,
@@ -15,7 +14,9 @@ import {
   MarkPointComponent,
   TooltipComponent,
 } from "echarts/components";
+import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
+import { useEffect, useRef } from "react";
 
 echarts.use([
   BarChart,
@@ -45,7 +46,9 @@ export function Chart({ option, className = "chart", label }: Props) {
 
   useEffect(() => {
     if (!host.current) return;
-    chart.current = echarts.init(host.current, undefined, { renderer: "canvas" });
+    chart.current = echarts.init(host.current, undefined, {
+      renderer: "canvas",
+    });
     const observer = new ResizeObserver(() => chart.current?.resize());
     observer.observe(host.current);
     return () => {

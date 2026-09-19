@@ -7,6 +7,7 @@
  */
 import type {
   BackendListResponse,
+  BacktestRequest,
   CoverageResponse,
   ForecastRequest,
   ForecastResponse,
@@ -30,7 +31,6 @@ import type {
   StrategyListResponse,
   TrackedRunList,
   TrackingStatus,
-  BacktestRequest,
 } from "./schema";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -97,15 +97,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-const get = <T,>(path: string, signal?: AbortSignal) => request<T>(path, { signal });
-const post = <T,>(path: string, body: unknown, signal?: AbortSignal) =>
+const get = <T>(path: string, signal?: AbortSignal) => request<T>(path, { signal });
+const post = <T>(path: string, body: unknown, signal?: AbortSignal) =>
   request<T>(path, { method: "POST", body: JSON.stringify(body), signal });
 
 const V1 = "/api/v1";
 
 export const api = {
   health: (signal?: AbortSignal) => get<HealthResponse>("/health", signal),
-  universe: (signal?: AbortSignal) => get<import("./schema").UniverseResponse>(`${V1}/meta/universe`, signal),
+  universe: (signal?: AbortSignal) =>
+    get<import("./schema").UniverseResponse>(`${V1}/meta/universe`, signal),
   strategies: (signal?: AbortSignal) => get<StrategyListResponse>(`${V1}/meta/strategies`, signal),
   backends: (signal?: AbortSignal) => get<BackendListResponse>(`${V1}/meta/backends`, signal),
 

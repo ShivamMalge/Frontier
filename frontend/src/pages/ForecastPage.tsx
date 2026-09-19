@@ -6,17 +6,17 @@
  */
 import { useMemo, useState } from "react";
 import { api } from "../api/client";
-import type { ForecastResponse, ForecastTarget } from "../api/schema";
 import { series } from "../api/frame";
-import { useAsync } from "../hooks/useAsync";
-import { useMeta } from "../state";
-import { Card, Field, Note, Spinner, Stat } from "../components/Bits";
-import { RunControls } from "../components/RunControls";
-import { Table, type Column } from "../components/Table";
+import type { ForecastResponse, ForecastTarget } from "../api/schema";
 import { Chart } from "../charts/Chart";
 import { bars, timeSeries } from "../charts/options";
 import { barChartClass, usePalette } from "../charts/theme";
+import { Card, Field, Note, Spinner, Stat } from "../components/Bits";
+import { RunControls } from "../components/RunControls";
+import { type Column, Table } from "../components/Table";
+import { useAsync } from "../hooks/useAsync";
 import { num, pct } from "../lib/format";
+import { useMeta } from "../state";
 
 /** Green only when the *displayed* value beats the baseline: a raw 0.9996
     rounds to "1.000", and colouring that green next to a true 1.000 reads as a
@@ -43,10 +43,23 @@ export function ForecastPage() {
     return timeSeries(
       palette,
       [
-        { name: "actual", points: series(result.actual_prices, ticker), slot: 0 },
-        { name: "predicted", points: series(result.predicted_prices, ticker), slot: 1, dashed: true },
+        {
+          name: "actual",
+          points: series(result.actual_prices, ticker),
+          slot: 0,
+        },
+        {
+          name: "predicted",
+          points: series(result.predicted_prices, ticker),
+          slot: 1,
+          dashed: true,
+        },
       ],
-      { format: (v) => num(v, 2), zoom: true, label: `${ticker} actual vs predicted` },
+      {
+        format: (v) => num(v, 2),
+        zoom: true,
+        label: `${ticker} actual vs predicted`,
+      },
     );
   }, [result, ticker, palette]);
 
@@ -64,13 +77,26 @@ export function ForecastPage() {
   }, [result, palette]);
 
   const columns: Column<ForecastResponse["metrics"][number]>[] = [
-    { key: "ticker", header: "Ticker", render: (m) => <span className="mono">{m.ticker}</span> },
-    { key: "obs", header: "Observations", num: true, render: (m) => m.observations },
+    {
+      key: "ticker",
+      header: "Ticker",
+      render: (m) => <span className="mono">{m.ticker}</span>,
+    },
+    {
+      key: "obs",
+      header: "Observations",
+      num: true,
+      render: (m) => m.observations,
+    },
     {
       key: "mase",
       header: "MASE",
       num: true,
-      render: (m) => <span className={beatsBaseline(m.mase_vs_naive) ? "pos" : undefined}>{num(m.mase_vs_naive)}</span>,
+      render: (m) => (
+        <span className={beatsBaseline(m.mase_vs_naive) ? "pos" : undefined}>
+          {num(m.mase_vs_naive)}
+        </span>
+      ),
     },
     {
       key: "dir",
@@ -80,7 +106,12 @@ export function ForecastPage() {
     },
     { key: "rmse", header: "RMSE", num: true, render: (m) => num(m.rmse, 2) },
     { key: "mae", header: "MAE", num: true, render: (m) => num(m.mae, 2) },
-    { key: "mape", header: "MAPE", num: true, render: (m) => pct(m.mape / 100, 2) },
+    {
+      key: "mape",
+      header: "MAPE",
+      num: true,
+      render: (m) => pct(m.mape / 100, 2),
+    },
     { key: "r2", header: "R²", num: true, render: (m) => num(m.r2) },
   ];
 
@@ -104,12 +135,18 @@ export function ForecastPage() {
       <Card>
         <RunControls>
           <Field label="Target" hint="A return target is what makes the models work at all.">
-            <select value={target} onChange={(event) => setTarget(event.target.value as ForecastTarget)}>
+            <select
+              value={target}
+              onChange={(event) => setTarget(event.target.value as ForecastTarget)}
+            >
               <option value="return">return</option>
               <option value="price">price</option>
             </select>
           </Field>
-          <Field label="Scope" hint={scope === "universe" ? "Backend can pool tickers." : "Per-ticker backend."}>
+          <Field
+            label="Scope"
+            hint={scope === "universe" ? "Backend can pool tickers." : "Per-ticker backend."}
+          >
             <select
               value={multiSeries ? "universe" : "ticker"}
               disabled={scope !== "universe"}
@@ -163,10 +200,18 @@ export function ForecastPage() {
 
           <Card>
             <dl className="grid stats" style={{ margin: 0 }}>
-              <Stat label="Backend" value={<span style={{ fontSize: 15 }}>{result.backend}</span>} sub={result.target} />
+              <Stat
+                label="Backend"
+                value={<span style={{ fontSize: 15 }}>{result.backend}</span>}
+                sub={result.target}
+              />
               <Stat label="Lookback" value={result.lookback_window} sub="days" />
               <Stat label="Train split" value={pct(result.train_split, 0)} />
-              <Stat label="Worst MASE" value={num(worst?.mase_vs_naive ?? null)} sub={worst?.ticker} />
+              <Stat
+                label="Worst MASE"
+                value={num(worst?.mase_vs_naive ?? null)}
+                sub={worst?.ticker}
+              />
             </dl>
           </Card>
 
@@ -183,11 +228,26 @@ export function ForecastPage() {
               </select>
             }
           >
-            {fit && <Chart option={fit} className="chart tall" label={`${ticker} actual against predicted`} />}
+            {fit && (
+              <Chart
+                option={fit}
+                className="chart tall"
+                label={`${ticker} actual against predicted`}
+              />
+            )}
           </Card>
 
-          <Card title="Forecast quality" hint="The two columns that carry signal are MASE and directional accuracy.">
-            {maseChart && <Chart option={maseChart} className={barChartClass(result.metrics.length)} label="MASE by ticker" />}
+          <Card
+            title="Forecast quality"
+            hint="The two columns that carry signal are MASE and directional accuracy."
+          >
+            {maseChart && (
+              <Chart
+                option={maseChart}
+                className={barChartClass(result.metrics.length)}
+                label="MASE by ticker"
+              />
+            )}
             <Table rows={result.metrics} columns={columns} rowKey={(m) => m.ticker} />
           </Card>
         </>

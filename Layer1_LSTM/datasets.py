@@ -112,7 +112,7 @@ def build_splits(
                 window=window,
                 min_train_samples=min_train_samples,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- one unusable series must not sink the batch
             failures.append((label, f"{type(exc).__name__}: {exc}"))
 
     return splits, failures
@@ -133,9 +133,7 @@ def build_split(
     """
     name = str(prices.name or "series")
     frame = prices.dropna().to_frame(name=name)
-    splits, failures = build_splits(
-        frame, train_split, target, lags, window, min_train_samples
-    )
+    splits, failures = build_splits(frame, train_split, target, lags, window, min_train_samples)
     if name not in splits:
         reason = failures[0][1] if failures else "no usable rows"
         raise ValueError(f"{name}: {reason}")

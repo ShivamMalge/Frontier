@@ -99,7 +99,7 @@ def _redis_store() -> JobStore:
 
 
 def get_job_store() -> JobStore:
-    global _store
+    global _store  # noqa: PLW0603 -- one store per process, guarded by _lock
     with _lock:
         if _store is None:
             _store = create_job_store()
@@ -108,6 +108,6 @@ def get_job_store() -> JobStore:
 
 def set_job_store(store: JobStore | None) -> None:
     """Replace the active store. Used by the tests and by the app lifespan."""
-    global _store
+    global _store  # noqa: PLW0603 -- see get_job_store
     with _lock:
         _store = store

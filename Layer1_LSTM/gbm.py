@@ -156,7 +156,7 @@ def forecast_universe(
             model = train_model(split.x_train, split.y_train, config, label=ticker)
             _record_diagnostics(model, split, config)
             forecasts.append(_to_forecast(model, split, config))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- a ticker that will not train is reported, not fatal
             failures.append((ticker, f"{type(exc).__name__}: {exc}"))
 
     return forecasts, failures

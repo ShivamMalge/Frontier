@@ -6,9 +6,10 @@
  * said, and that a finished pipeline job renders its numbers. That is the part
  * that breaks: a bad hook order or a null result reaching a table.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { MetaProvider } from "./state";
 
@@ -52,15 +53,39 @@ const PIPELINE_RESULT = {
       legacy_approximate_accuracy: 98.2,
     },
   ],
-  weights: { index: ["AAPL", "MSFT"], columns: ["HRP", "GMV"], data: [[0.6, 0.4], [0.4, 0.6]] },
+  weights: {
+    index: ["AAPL", "MSFT"],
+    columns: ["HRP", "GMV"],
+    data: [
+      [0.6, 0.4],
+      [0.4, 0.6],
+    ],
+  },
   performance: [
-    { strategy: "HRP", annual_return: 0.12, annual_volatility: 0.18, sharpe: 0.67, sortino: 0.9, max_drawdown: -0.2 },
-    { strategy: "GMV", annual_return: 0.08, annual_volatility: 0.14, sharpe: 0.57, sortino: 0.8, max_drawdown: -0.15 },
+    {
+      strategy: "HRP",
+      annual_return: 0.12,
+      annual_volatility: 0.18,
+      sharpe: 0.67,
+      sortino: 0.9,
+      max_drawdown: -0.2,
+    },
+    {
+      strategy: "GMV",
+      annual_return: 0.08,
+      annual_volatility: 0.14,
+      sharpe: 0.57,
+      sortino: 0.8,
+      max_drawdown: -0.15,
+    },
   ],
   cumulative_growth: {
     index: ["2022-01-03", "2022-01-04"],
     columns: ["HRP", "GMV"],
-    data: [[1.0, 1.0], [1.01, 1.005]],
+    data: [
+      [1.0, 1.0],
+      [1.01, 1.005],
+    ],
   },
   selected_strategy: "GMV",
   selected_weights: { AAPL: 0.4, MSFT: 0.6 },
@@ -119,9 +144,12 @@ describe("the shell", () => {
   });
 
   it("says so when the API is unreachable instead of rendering empty controls", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => {
-      throw new Error("connection refused");
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("connection refused");
+      }),
+    );
     renderApp();
 
     expect(await screen.findByText(/API unreachable/)).toBeTruthy();
@@ -151,7 +179,12 @@ describe("a finished pipeline run", () => {
           created_at: "2026-01-01T00:00:00Z",
           progress: 1,
         },
-        "/pipeline/runs": { job_id: "job-1", state: "queued", status_url: "", result_url: "" },
+        "/pipeline/runs": {
+          job_id: "job-1",
+          state: "queued",
+          status_url: "",
+          result_url: "",
+        },
       }),
     );
     renderApp();

@@ -174,9 +174,7 @@ class PriceStore:
         if not self.exists():
             return pl.LazyFrame(schema=SCHEMA)
 
-        frame = pl.scan_parquet(
-            self.prices_root / "**" / "*.parquet", hive_partitioning=True
-        )
+        frame = pl.scan_parquet(self.prices_root / "**" / "*.parquet", hive_partitioning=True)
         if tickers:
             wanted = [ticker.upper() for ticker in tickers]
             frame = frame.filter(pl.col(PARTITION_COLUMN).is_in(wanted))
@@ -309,9 +307,7 @@ def _conform(frame: pl.DataFrame) -> pl.DataFrame:
 def _detect_revisions(existing: pl.DataFrame, fresh: pl.DataFrame) -> pl.DataFrame:
     """Rows whose stored values differ from the incoming ones for the same date."""
     stored = existing.select(["date", *[c for c in VALUE_COLUMNS if c in existing.columns]])
-    incoming = fresh.select(
-        ["date", "ticker", *[c for c in VALUE_COLUMNS if c in fresh.columns]]
-    )
+    incoming = fresh.select(["date", "ticker", *[c for c in VALUE_COLUMNS if c in fresh.columns]])
     joined = incoming.join(stored, on="date", how="inner", suffix="_old")
 
     shared = [c for c in VALUE_COLUMNS if c in incoming.columns and f"{c}_old" in joined.columns]

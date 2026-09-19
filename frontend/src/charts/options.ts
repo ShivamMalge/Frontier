@@ -5,9 +5,9 @@
  * choose a form; they never assemble axes or tooltips themselves.
  */
 import type { EChartsCoreOption } from "echarts/core";
-import { axis, base, type Palette } from "./theme";
 import type { Point } from "../api/frame";
 import { num, pct } from "../lib/format";
+import { axis, base, type Palette } from "./theme";
 
 export interface LineSeries {
   name: string;
@@ -26,7 +26,9 @@ export interface LineSeries {
 export function timeSeries(
   palette: Palette,
   series: LineSeries[],
-  options: { format?: (v: number) => string; zoom?: boolean; label: string } = { label: "" },
+  options: { format?: (v: number) => string; zoom?: boolean; label: string } = {
+    label: "",
+  },
 ): EChartsCoreOption {
   const format = options.format ?? ((v: number) => num(v, 2));
   return {
@@ -39,7 +41,11 @@ export function timeSeries(
       axisPointer: {
         type: "line",
         lineStyle: { color: palette.muted, width: 1, type: "dashed" },
-        label: { backgroundColor: palette.surface, color: palette.text, borderColor: palette.border },
+        label: {
+          backgroundColor: palette.surface,
+          color: palette.text,
+          borderColor: palette.border,
+        },
       },
       valueFormatter: (value: unknown) => (typeof value === "number" ? format(value) : "--"),
     },
@@ -73,7 +79,11 @@ export function timeSeries(
         color: palette.series[line.slot],
         ...(line.dashed ? { type: "dashed" as const } : {}),
       },
-      itemStyle: { color: palette.series[line.slot], borderColor: palette.surface, borderWidth: 2 },
+      itemStyle: {
+        color: palette.series[line.slot],
+        borderColor: palette.surface,
+        borderWidth: 2,
+      },
       emphasis: { focus: "series" as const },
       data: line.points,
     })),
@@ -122,11 +132,7 @@ export function bars(
         // 4px rounded data-end, square at the baseline.
         itemStyle: {
           color: (p: { value: number }) =>
-            options.signed
-              ? p.value >= 0
-                ? palette.good
-                : palette.bad
-              : palette.series[slot],
+            options.signed ? (p.value >= 0 ? palette.good : palette.bad) : palette.series[slot],
           borderRadius: [0, 4, 4, 0],
         },
         barMaxWidth: 16,
@@ -188,22 +194,41 @@ export function frontier(
         return `${name ?? "frontier"}<br/>return <b>${pct(ret)}</b><br/>vol <b>${pct(vol)}</b><br/>sharpe <b>${num(sharpe)}</b>`;
       },
     },
-    xAxis: { type: "value", scale: true, ...axis(palette, { name: "annualised volatility", format: (v) => pct(v, 0) }) },
-    yAxis: { type: "value", scale: true, ...axis(palette, { name: "expected return", format: (v) => pct(v, 0) }) },
+    xAxis: {
+      type: "value",
+      scale: true,
+      ...axis(palette, {
+        name: "annualised volatility",
+        format: (v) => pct(v, 0),
+      }),
+    },
+    yAxis: {
+      type: "value",
+      scale: true,
+      ...axis(palette, { name: "expected return", format: (v) => pct(v, 0) }),
+    },
     series: [
       {
         type: "line",
         showSymbol: true,
         symbolSize: 8,
         lineStyle: { width: 2, color: palette.series[0] },
-        itemStyle: { color: palette.series[0], borderColor: palette.surface, borderWidth: 2 },
+        itemStyle: {
+          color: palette.series[0],
+          borderColor: palette.surface,
+          borderWidth: 2,
+        },
         data: points.map((p) => [p.volatility, p.expected_return, p.sharpe, "frontier"]),
         ...(best
           ? {
               markPoint: {
                 symbol: "circle",
                 symbolSize: 13,
-                itemStyle: { color: palette.series[1], borderColor: palette.surface, borderWidth: 2 },
+                itemStyle: {
+                  color: palette.series[1],
+                  borderColor: palette.surface,
+                  borderWidth: 2,
+                },
                 label: {
                   show: true,
                   position: "top",
@@ -220,7 +245,11 @@ export function frontier(
       {
         type: "scatter",
         symbolSize: 11,
-        itemStyle: { color: palette.series[2], borderColor: palette.surface, borderWidth: 2 },
+        itemStyle: {
+          color: palette.series[2],
+          borderColor: palette.surface,
+          borderWidth: 2,
+        },
         label: {
           show: extras.length <= 4,
           position: "right",

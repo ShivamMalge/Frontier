@@ -24,9 +24,7 @@ def store_client(tmp_path, monkeypatch):
     monkeypatch.setenv("SO_MARKET_DATA_SOURCE", "parquet")
     get_settings.cache_clear()
 
-    PriceStore(root).write(
-        ohlcv(TICKERS, "2018-01-01", "2022-01-01"), dt.datetime(2026, 1, 1, 9)
-    )
+    PriceStore(root).write(ohlcv(TICKERS, "2018-01-01", "2022-01-01"), dt.datetime(2026, 1, 1, 9))
 
     jobs.set_job_store(None)
     with TestClient(create_app()) as client:
@@ -94,9 +92,7 @@ class TestParquetSource:
         assert body["tickers"] == ["AAA", "BBB"]
         assert body["observations"] > 200
 
-    def test_a_ticker_not_in_the_store_is_refused_rather_than_downloaded(
-        self, store_client
-    ):
+    def test_a_ticker_not_in_the_store_is_refused_rather_than_downloaded(self, store_client):
         """Falling back to the network would undo the whole point of the store."""
         response = store_client.post(
             "/api/v1/market/prices",
@@ -192,16 +188,12 @@ class TestQuery:
         )
         assert response.status_code == 422
 
-    def test_a_select_containing_a_forbidden_word_in_a_string_is_still_refused(
-        self, store_client
-    ):
+    def test_a_select_containing_a_forbidden_word_in_a_string_is_still_refused(self, store_client):
         """Deliberately conservative: a keyword check cannot parse SQL properly.
 
         Refusing a harmless query is a far better failure than allowing a COPY.
         """
-        response = store_client.post(
-            "/api/v1/data/query", json={"sql": "SELECT 'create' AS word"}
-        )
+        response = store_client.post("/api/v1/data/query", json={"sql": "SELECT 'create' AS word"})
         assert response.status_code == 422
 
 

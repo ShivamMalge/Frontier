@@ -168,6 +168,4 @@ class TestDurability:
 
         assert Queue(QUEUE, connection=connection).count == 1
         drain(connection)
-        assert RedisJobStore(connection, queue_name=QUEUE).get(job_id).state is (
-            JobState.SUCCEEDED
-        )
+        assert RedisJobStore(connection, queue_name=QUEUE).get(job_id).state is (JobState.SUCCEEDED)

@@ -7,6 +7,8 @@ plausible-looking weights.
 
 from __future__ import annotations
 
+from itertools import pairwise
+
 import numpy as np
 import pytest
 
@@ -94,18 +96,14 @@ class TestConstraints:
     def test_group_cap_is_respected(self):
         assets, _, cov = sample()
         group = assets[:3]
-        w = min_variance(
-            cov, assets, Constraints(group_caps={"first_three": (group, 0.25)})
-        )
+        w = min_variance(cov, assets, Constraints(group_caps={"first_three": (group, 0.25)}))
         held = sum(w[assets.index(a)] for a in group)
         assert held <= 0.25 + 1e-6
 
     def test_group_floor_is_respected(self):
         assets, _, cov = sample()
         group = assets[:2]
-        w = min_variance(
-            cov, assets, Constraints(group_floors={"first_two": (group, 0.40)})
-        )
+        w = min_variance(cov, assets, Constraints(group_floors={"first_two": (group, 0.40)}))
         held = sum(w[assets.index(a)] for a in group)
         assert held >= 0.40 - 1e-6
 
@@ -204,7 +202,7 @@ class TestEfficientFrontier:
         assets, mu, cov = sample()
         points = efficient_frontier(mu, cov, assets, points=25)
         assert len(points) >= 20
-        for earlier, later in zip(points, points[1:], strict=False):
+        for earlier, later in pairwise(points):
             assert earlier.expected_return <= later.expected_return + 1e-12
             assert earlier.volatility <= later.volatility + 1e-6
 

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
+
 import pytest
 
 
 def test_optimize_returns_normalised_weights_for_every_strategy(client, returns_frame):
-    body = client.post(
-        "/api/v1/portfolio/optimize", json={"returns": returns_frame}
-    ).json()
+    body = client.post("/api/v1/portfolio/optimize", json={"returns": returns_frame}).json()
 
     from app.services.optimization import ALL_STRATEGIES
 
@@ -68,9 +68,9 @@ def test_ragged_frame_is_rejected(client):
 
 
 def test_performance_produces_plausible_annualised_statistics(client, returns_frame):
-    weights = client.post(
-        "/api/v1/portfolio/optimize", json={"returns": returns_frame}
-    ).json()["weights"]
+    weights = client.post("/api/v1/portfolio/optimize", json={"returns": returns_frame}).json()[
+        "weights"
+    ]
 
     body = client.post(
         "/api/v1/portfolio/performance",
@@ -94,9 +94,9 @@ def test_performance_produces_plausible_annualised_statistics(client, returns_fr
 
 def test_performance_aligns_on_tickers_not_position(client, returns_frame):
     """Weights given in a different order must still be matched by label."""
-    weights = client.post(
-        "/api/v1/portfolio/optimize", json={"returns": returns_frame}
-    ).json()["weights"]
+    weights = client.post("/api/v1/portfolio/optimize", json={"returns": returns_frame}).json()[
+        "weights"
+    ]
 
     order = [3, 1, 0, 2]
     shuffled = {
@@ -219,7 +219,7 @@ class TestEfficientFrontier:
 
         points = body["points"]
         assert len(points) >= 15
-        for earlier, later in zip(points, points[1:], strict=False):
+        for earlier, later in pairwise(points):
             assert earlier["expected_return"] <= later["expected_return"] + 1e-9
             assert earlier["volatility"] <= later["volatility"] + 1e-6
 

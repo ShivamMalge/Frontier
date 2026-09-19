@@ -48,9 +48,9 @@ def polars_wide_to_pandas(frame: pl.DataFrame, date_column: str = DATE) -> pd.Da
 
 def wide_to_long(frame: pl.DataFrame, value_name: str = PRICE) -> pl.DataFrame:
     """``date`` plus one column per ticker becomes ``date, ticker, <value>``."""
-    return frame.unpivot(
-        index=DATE, variable_name=TICKER, value_name=value_name
-    ).drop_nulls(value_name)
+    return frame.unpivot(index=DATE, variable_name=TICKER, value_name=value_name).drop_nulls(
+        value_name
+    )
 
 
 def long_to_wide(frame: pl.DataFrame, value_name: str = PRICE) -> pl.DataFrame:

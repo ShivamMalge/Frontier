@@ -19,5 +19,5 @@ def choose_portfolio_by_risk(perf_df: pd.DataFrame, risk_tolerance: float) -> st
 
     risk_tolerance = min(max(float(risk_tolerance), 0.0), 1.0)
     ranked = perf_df["Annual Vol"].sort_values().index.tolist()
-    position = int(round(risk_tolerance * (len(ranked) - 1)))
+    position = round(risk_tolerance * (len(ranked) - 1))
     return str(ranked[position])

@@ -1,0 +1,13 @@
+# Normalise line endings so a Windows checkout does not rewrite every file.
+* text=auto eol=lf
+
+# Binary, never diffed or merged.
+*.parquet binary
+*.h5 binary
+*.keras binary
+*.png binary
+
+# Generated: keep it out of diff review and out of language statistics.
+frontend/src/api/schema.ts linguist-generated=true
+uv.lock linguist-generated=true
+frontend/package-lock.json linguist-generated=true

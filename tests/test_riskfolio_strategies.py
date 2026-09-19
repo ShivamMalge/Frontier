@@ -81,9 +81,7 @@ class TestGerber:
 
     def test_differs_from_the_sample_covariance(self, returns):
         """Thresholding small moves as noise should change the estimate."""
-        assert not np.allclose(
-            rs.gerber_covariance(returns), returns.cov().to_numpy(), atol=1e-8
-        )
+        assert not np.allclose(rs.gerber_covariance(returns), returns.cov().to_numpy(), atol=1e-8)
 
     def test_hrp_variant_uses_the_off_diagonals_unlike_inverse_variance(self, returns):
         """Inverse-variance weighting reads only the diagonal.

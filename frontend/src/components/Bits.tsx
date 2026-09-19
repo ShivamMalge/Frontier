@@ -39,7 +39,13 @@ export function Stat({ label, value, sub }: { label: string; value: ReactNode; s
   );
 }
 
-export function Note({ kind = "info", children }: { kind?: "info" | "warn" | "error"; children: ReactNode }) {
+export function Note({
+  kind = "info",
+  children,
+}: {
+  kind?: "info" | "warn" | "error";
+  children: ReactNode;
+}) {
   const mark = { info: "note", warn: "warning", error: "error" }[kind];
   return (
     <div className={`note ${kind}`}>
@@ -59,6 +65,7 @@ export function Field({
   children: ReactNode;
 }) {
   return (
+    // biome-ignore lint/a11y/noLabelWithoutControl: the control is the caller's `children`, nested inside this label -- the association the rule wants, just not one it can see statically
     <label className="field">
       <span>{label}</span>
       {children}

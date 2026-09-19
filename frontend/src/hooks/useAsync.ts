@@ -15,7 +15,11 @@ export interface AsyncState<T> {
 }
 
 export function useAsync<T>() {
-  const [state, setState] = useState<AsyncState<T>>({ data: null, error: null, loading: false });
+  const [state, setState] = useState<AsyncState<T>>({
+    data: null,
+    error: null,
+    loading: false,
+  });
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
 
@@ -47,16 +51,4 @@ export function useAsync<T>() {
   useEffect(() => () => controller.current?.abort(), []);
 
   return { ...state, run, reset };
-}
-
-/** Fetch once on mount. For the metadata endpoints, which never change. */
-export function useOnce<T>(work: (signal: AbortSignal) => Promise<T>, deps: unknown[] = []) {
-  const state = useAsync<T>();
-  const { run } = state;
-  useEffect(() => {
-    void run(work);
-    // The caller owns the dependency list; `work` is re-created every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  return state;
 }

@@ -83,9 +83,7 @@ def _dispatch(
 
     return {
         "Markowitz_MaxSharpe": lambda: plain(
-            convex.max_sharpe(
-                mu, cov, assets, constraints, rf, TRADING_DAYS_PER_YEAR
-            )
+            convex.max_sharpe(mu, cov, assets, constraints, rf, TRADING_DAYS_PER_YEAR)
         ),
         "Markowitz_MinVar": lambda: plain(convex.min_variance(cov, assets, constraints)),
         "RiskParity": lambda: StrategyResult(*convex.risk_parity(cov, assets, constraints)),
@@ -95,9 +93,7 @@ def _dispatch(
         "Gerber_InvVar": lambda: unconstrained(
             "Gerber_InvVar", riskfolio_strategies.gerber_inverse_variance(returns)
         ),
-        "Gerber_HRP": lambda: unconstrained(
-            "Gerber_HRP", riskfolio_strategies.gerber_hrp(returns)
-        ),
+        "Gerber_HRP": lambda: unconstrained("Gerber_HRP", riskfolio_strategies.gerber_hrp(returns)),
         "MinCVaR": lambda: plain(riskfolio_strategies.min_cvar(returns)),
         "MinCDaR": lambda: plain(riskfolio_strategies.min_cdar(returns)),
     }
@@ -152,7 +148,7 @@ def build_all_portfolios(
                 warnings.simplefilter("always")
                 result = available[name]()
                 messages.extend(f"{name}: {item.message}" for item in caught)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- one strategy failing must not drop the other nine
             messages.append(f"{name}: failed ({type(exc).__name__}: {exc})")
             continue
 

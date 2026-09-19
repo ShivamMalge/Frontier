@@ -68,9 +68,7 @@ class TestFeatures:
         truncated = build_features(prices.iloc[:-50])
 
         overlap = truncated.index
-        pd.testing.assert_frame_equal(
-            full.loc[overlap], truncated, check_exact=False, atol=1e-12
-        )
+        pd.testing.assert_frame_equal(full.loc[overlap], truncated, check_exact=False, atol=1e-12)
 
     def test_warm_up_rows_are_nan_not_fabricated(self, prices):
         frame = build_features(prices)
@@ -135,5 +133,6 @@ class TestSplitAlignment:
     def test_too_little_data_is_rejected_clearly(self):
         short = synthetic_prices(["AAA"], "2022-01-01", "2022-04-01")["AAA"]
         short.name = "AAA"
-        with pytest.raises(ValueError, match="training rows|no usable rows|sequences"):
+        # Alternation is deliberate: any of the three messages is a correct rejection.
+        with pytest.raises(ValueError, match=r"training rows|no usable rows|sequences"):
             build_split(short, train_split=2 / 3, window=60)

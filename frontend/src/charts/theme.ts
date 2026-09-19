@@ -82,7 +82,10 @@ export function base(palette: Palette) {
   return {
     backgroundColor: "transparent",
     animationDuration: 260,
-    textStyle: { fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif", fontSize: 12 },
+    textStyle: {
+      fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+      fontSize: 12,
+    },
     grid: { left: 58, right: 20, top: 30, bottom: 44, containLabel: false },
     tooltip: {
       backgroundColor: palette.surface,
@@ -109,7 +112,10 @@ export function base(palette: Palette) {
 }
 
 /** Recessive axis: a hairline, muted labels, horizontal split lines only. */
-export function axis(palette: Palette, options: { name?: string; format?: (v: number) => string } = {}) {
+export function axis(
+  palette: Palette,
+  options: { name?: string; format?: (v: number) => string } = {},
+) {
   return {
     nameTextStyle: { color: palette.muted, fontSize: 11 },
     ...(options.name ? { name: options.name, nameLocation: "middle" as const, nameGap: 32 } : {}),
@@ -120,7 +126,13 @@ export function axis(palette: Palette, options: { name?: string; format?: (v: nu
       fontSize: 11,
       ...(options.format ? { formatter: options.format } : {}),
     },
-    splitLine: { lineStyle: { color: palette.border, type: "dashed" as const, opacity: 0.7 } },
+    splitLine: {
+      lineStyle: {
+        color: palette.border,
+        type: "dashed" as const,
+        opacity: 0.7,
+      },
+    },
   };
 }
 

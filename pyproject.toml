@@ -73,6 +73,9 @@ dev = [
     # without Docker or root. tests/test_worker_process.py skips without it.
     "redislite>=6.0",
     "ruff>=0.6",
+    "pytest-cov>=5.0",
+    # Hooks are opt-in per clone: `uv run pre-commit install`.
+    "pre-commit>=4.0",
 ]
 
 [project.scripts]
@@ -107,6 +110,105 @@ explicit = true
 [tool.uv.sources]
 # macOS has no separate CPU wheel -- the default PyPI build is already CPU-only.
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }]
+
+# --- lint and format (Phase 10) -----------------------------------------------
+# One tool for both, so there is no second opinion about style. CI runs
+# `ruff check` and `ruff format --check`; the pre-commit hook runs both with
+# --fix so that rarely comes up.
+
+[tool.ruff]
+# 100, not 88: the numerical code reads better with the extra room, and every
+# line in the repo already fits.
+line-length = 100
+target-version = "py312"
+extend-exclude = ["venv", ".venv", "frontend", "mlruns", "data"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # import sorting
+    "N",         # pep8 naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "C4",        # comprehensions
+    "SIM",       # simplify
+    "RET",       # return paths
+    "PIE",       # misc lints
+    "PERF",      # obvious performance traps
+    "ARG",       # unused arguments
+    "DTZ",       # naive datetimes
+    "BLE",       # blind excepts
+    "PT",        # pytest style
+    "TID",       # tidy imports
+    "PL",        # pylint subset
+    "RUF",       # ruff's own
+]
+
+# Each of these is off for a reason, not because it was noisy.
+ignore = [
+    # Imports inside functions are load-bearing here: `app/tasks.py` defers
+    # heavy imports so a worker pays for them only when it runs that task, and
+    # the forecasting backends import their framework lazily so a deployment
+    # without torch still starts. 94 hits, all deliberate.
+    "PLC0415",
+    # Comparing against a literal is what a numerical test does: `assert
+    # mase > 0.9`, `assert weights.sum() == 1`. Naming every threshold would
+    # make the assertions harder to read, not easier.
+    "PLR2004",
+    # `run(returns, strategies, risk_free_rate, constraints, lookback,
+    # rebalance_every, cost_bps, on_progress)` is a parameter list, not a code
+    # smell. Bundling them into a config object would only move the arity.
+    "PLR0913", "PLR0917",
+    # Conflicts with the formatter, which is the authority on line breaks.
+    "ISC001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The Layer* directory names are historical -- they are what the original
+# project called its pipeline stages, and renaming them would break every
+# import in the README and in anything anyone has already written against this.
+"Layer*/__init__.py" = ["N999"]
+"Layer*/*.py" = ["N999", "N803", "N806"]  # X_train, S, W: matrix names, by convention
+"tests/*.py" = [
+    # Fixed timestamps in fixtures, compared against stored values rather than
+    # wall-clock. A timezone would add noise, not correctness.
+    "DTZ001",
+    # Fixtures and monkeypatched stubs must match a signature they do not use.
+    "ARG001", "ARG002", "ARG005",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "app", "utils", "Layer1_LSTM", "Layer1_Preprocessing",
+    "Layer2_Optimization", "Layer3_Portfolio_Generation",
+]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.coverage.run]
+# The numerical core and the service, not the tests measuring them.
+source = ["app", "utils", "Layer1_LSTM", "Layer1_Preprocessing", "Layer2_Optimization", "Layer3_Portfolio_Generation"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+# 84, with the suite at 85.9% under branch coverage: a floor that catches a real
+# regression without failing CI over a refactor that moves a few lines around.
+# Raise it when the number rises; never lower it to make a build pass.
+fail_under = 84
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    'if __name__ == "__main__":',
+]
+# `app/worker.py` reads 0%: tests/test_worker_process.py runs it as a real
+# subprocess, which coverage does not follow. It is left in the measurement
+# rather than omitted -- omitting it would raise the number without covering
+# anything.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -103,7 +103,7 @@ class RedisJobStore:
                 # Signals the worker to kill the work horse -- a real stop, which
                 # the thread-based store cannot do.
                 send_stop_job_command(self._connection, job_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- cancellation is best-effort; report what happened
                 logger.warning("could not stop running job %s: %s", job_id, exc)
                 record = self._to_record(job)
                 record.message = f"cancellation requested but the worker did not stop it: {exc}"
@@ -111,7 +111,7 @@ class RedisJobStore:
         else:
             try:
                 job.cancel()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- see above; a queued job may already be gone
                 logger.warning("could not cancel job %s: %s", job_id, exc)
 
         return self._to_record(self._fetch(job_id))
