@@ -17,8 +17,10 @@ import pandas as pd
 
 from app.errors import NoMarketDataError
 from app.settings import get_settings
-from Layer1_Preprocessing.data_loader import download_adjusted_close
+from Layer1_Preprocessing.data_loader import download_adjusted_close, download_ohlcv
+from Layer1_Preprocessing.frames import polars_wide_to_pandas
 from Layer1_Preprocessing.preprocessing import compute_returns
+from Layer1_Preprocessing.store import PriceStore
 from Layer1_Preprocessing.synthetic import synthetic_prices
 
 
@@ -70,17 +72,89 @@ class PriceCache:
 _cache = PriceCache(get_settings().price_cache_ttl_seconds)
 
 
+def get_store() -> PriceStore:
+    """The configured Parquet price store."""
+    return PriceStore(get_settings().data_root)
+
+
 def _fetch(tickers: list[str], start: str, end: str) -> pd.DataFrame:
     """Dispatch to the configured data source.
 
-    ``synthetic`` needs no network, which makes it the right choice for offline
-    development and for tests whose work runs in a separate process. Phase 6 adds
-    a ``parquet`` source backed by DuckDB.
+    ``parquet`` reads the local store and deliberately does **not** fall back to the
+    network. Silently reaching upstream would reintroduce exactly the
+    irreproducibility the store exists to remove, so a gap is an error telling the
+    caller to ingest.
+
+    ``synthetic`` needs no network, which makes it right for offline development and
+    for tests whose work runs in a separate process.
     """
     source = get_settings().market_data_source
+
     if source == "synthetic":
         return synthetic_prices(tickers, start, end)
+
+    if source == "parquet":
+        return _from_store(tickers, start, end)
+
     return download_adjusted_close(tickers, start, end)
+
+
+def _from_store(tickers: list[str], start: str, end: str) -> pd.DataFrame:
+    store = get_store()
+    if not store.exists():
+        raise NoMarketDataError(
+            f"the price store at {store.root} is empty; ingest prices first "
+            "(POST /api/v1/data/ingest)",
+            store=str(store.root),
+        )
+
+    wanted = [ticker.upper() for ticker in tickers]
+    missing = sorted(set(wanted) - set(store.stored_tickers()))
+    if missing:
+        raise NoMarketDataError(
+            f"not in the price store: {', '.join(missing)}; ingest them first. "
+            "The parquet source never falls back to the network, because that would "
+            "make results depend on when they were run.",
+            missing=",".join(missing),
+        )
+
+    wide = store.read_wide(
+        wanted, dt.date.fromisoformat(start), dt.date.fromisoformat(end)
+    )
+    if wide.is_empty() or wide.width <= 1:
+        return pd.DataFrame()
+
+    prices = polars_wide_to_pandas(wide)
+    return prices.dropna(axis=1, how="all").sort_index().dropna(axis=0, how="any")
+
+
+def ingest(
+    tickers: list[str],
+    start: dt.date,
+    end: dt.date,
+    on_progress=None,
+):
+    """Download OHLCV and merge it into the store, returning the report."""
+    store = get_store()
+    if on_progress:
+        on_progress(0.1, f"downloading {len(tickers)} tickers")
+
+    frame = download_ohlcv([t.upper() for t in tickers], start.isoformat(), end.isoformat())
+    if frame.is_empty():
+        raise NoMarketDataError(
+            "the upstream provider returned no rows for this request",
+            tickers=",".join(tickers),
+        )
+
+    if on_progress:
+        on_progress(0.7, "writing parquet")
+    report = store.write(frame)
+
+    # Newly stored prices invalidate anything cached from a previous source.
+    clear_cache()
+    if on_progress:
+        on_progress(1.0, "ingest complete")
+    return report
 
 
 def get_prices(

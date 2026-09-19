@@ -5,10 +5,10 @@
 Forecast equity prices, optimize portfolios across six strategies, and compare
 their risk-adjusted performance.
 
-**Migration status: Phases 1–5 of 10 complete**, plus walk-forward backtesting —
+**Migration status: Phases 1–6 of 10 complete**, plus walk-forward backtesting —
 FastAPI + Pydantic service layer, RQ + Redis job queue, PyTorch + LightGBM
-forecasting, cvxpy + Riskfolio-Lib optimizers, Polars data pipeline.
-See [Migration roadmap](#migration-roadmap).
+forecasting, cvxpy + Riskfolio-Lib optimizers, Polars data pipeline, Parquet +
+DuckDB price store. See [Migration roadmap](#migration-roadmap).
 
 ---
 
@@ -136,6 +136,9 @@ baked into the normalisation. Remove that and price-level modelling falls apart.
 | `GET` | `/health` | Liveness, and which forecast backends this process has |
 | `GET` | `/api/v1/meta/universe` | Default tickers and pipeline parameters |
 | `GET` | `/api/v1/meta/strategies` | Strategy catalogue with descriptions |
+| `POST` | `/api/v1/data/ingest` | Download OHLCV into the store → `202` + job id |
+| `GET` | `/api/v1/data/coverage` | What the store holds, and where it has gaps |
+| `POST` | `/api/v1/data/query` | Read-only SQL against the store |
 | `POST` | `/api/v1/market/prices` | Adjusted closing prices |
 | `POST` | `/api/v1/market/returns` | Simple daily returns |
 | `GET` | `/api/v1/meta/backends` | Forecasting backends, scopes and availability |
@@ -276,6 +279,7 @@ app/                  FastAPI service (Phase 1)
 Layer1_Preprocessing/ price retrieval, returns, features, synthetic source
     features_polars.py  22 features for the whole universe in one Polars pass
     frames.py         the only sanctioned Polars/pandas crossings
+    store.py          Parquet price store, DuckDB queries, revision tracking
 Layer1_LSTM/          forecasting (name is historical, not LSTM-only)
     torch_lstm.py     PyTorch LSTM
     gbm.py            LightGBM
@@ -292,7 +296,7 @@ Layer3_Portfolio_Generation/  construction, performance, selection
 Layer4_Visualization/ dead matplotlib code -- superseded, see below
 Layer5_Streamlit_App/ interim UI (Phase 9 replaces it)
 utils/                config, logging, filesystem helpers
-tests/                259 tests, no network access
+tests/                300 tests, no network access
 ```
 
 Dependencies point one way: `app` → `Layer*` → `utils`. Nothing in the numerical
@@ -411,6 +415,15 @@ Carried forward deliberately, each scheduled to a later phase:
   not implemented; `BacktestRequest.on_forecast` is reserved for it.
 - **Costs are a flat spread.** `cost_bps` on traded notional, with no market impact,
   no bid-ask modelling and no borrow cost on shorts.
+- **The store keeps only the latest value per bar.** Revisions are *reported*, and
+  `ingested_at` records which batch wrote each surviving row, but the superseded
+  value is not retained — so you cannot replay a backtest against last month's
+  vintage. Full bitemporal history would mean keeping every version of every bar.
+- **`/data/query` uses a keyword denylist, not a SQL parser.** It is deliberately
+  conservative and will refuse some harmless queries. Do not expose it to untrusted
+  callers on the strength of that check alone.
+- **The store holds volume and intraday range, but no feature uses them yet.** The
+  Phase 3 features are close-only; widening them is a follow-on.
 - **One-step-ahead only.** Every backend predicts the next trading day. Multi-horizon
   forecasting is not implemented.
 - **Sequence models are memory-bound at scale.** A 60-step window over 22 features
@@ -443,10 +456,16 @@ Carried forward deliberately, each scheduled to a later phase:
   queued job but only flags a running one, because Python threads cannot be
   interrupted.
 
-### Offline data source
+### Data sources
 
-`SO_MARKET_DATA_SOURCE=synthetic` replaces yfinance with deterministic geometric
-random walks seeded per ticker (`Layer1_Preprocessing/synthetic.py`). Useful for
+`SO_MARKET_DATA_SOURCE` selects one of three:
+
+- **`yfinance`** (default) — hits the network on every request. Convenient, and not
+  reproducible, because upstream restates history.
+- **`parquet`** — reads the local store. The reproducible option; see
+  [Price store](#price-store).
+- **`synthetic`** — deterministic geometric random walks seeded per ticker
+  (`Layer1_Preprocessing/synthetic.py`). Useful for
 development without a network, for reproducible demos, and for tests whose work
 runs in a separate process. It is also a sanity check: a model that appears to
 beat a random walk on this data has a bug, because there is no structure to find.
@@ -463,8 +482,8 @@ Phase 6 adds a `parquet` source alongside it.
 | 3 | Forecasting | PyTorch + LightGBM | **done** |
 | 4 | Optimizers | cvxpy (Clarabel/OSQP) + Riskfolio-Lib | **done** |
 | 5 | Dataframes | Polars | **done** |
-| 6 | Storage | Parquet + DuckDB | next |
-| 7 | Tracking | MLflow | |
+| 6 | Storage | Parquet + DuckDB | **done** |
+| 7 | Tracking | MLflow | next |
 | 8 | Packaging | uv + pyproject.toml + Docker | |
 | 9 | Frontend | React + TypeScript + Vite, ECharts | |
 | 10 | Quality | pytest + ruff + git | |

@@ -42,9 +42,12 @@ class Settings(BaseSettings):
     trading_days_per_year: int = domain.TRADING_DAYS_PER_YEAR
 
     # --- service knobs ---
-    #: "yfinance" hits the network; "synthetic" generates deterministic offline
-    #: series (see Layer1_Preprocessing/synthetic.py). Phase 6 adds "parquet".
-    market_data_source: Literal["yfinance", "synthetic"] = "yfinance"
+    #: "yfinance" hits the network. "synthetic" generates deterministic offline
+    #: series. "parquet" reads the local store, which is the reproducible option:
+    #: yfinance restates history, so only a stored snapshot gives repeatable results.
+    market_data_source: Literal["yfinance", "synthetic", "parquet"] = "yfinance"
+    #: Root of the Parquet price store.
+    data_root: str = "data/store"
     default_forecast_backend: str = "naive"
     price_cache_ttl_seconds: int = 3600
 

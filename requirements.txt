@@ -14,9 +14,10 @@ pydantic-settings>=2.4
 rq>=2.0
 redis>=5.0
 
-# --- dataframes ---
+# --- dataframes and storage ---
 polars>=1.0
 pyarrow>=15.0
+duckdb>=1.0
 
 # --- numerical core ---
 numpy>=2.0

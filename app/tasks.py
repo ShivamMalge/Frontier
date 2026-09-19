@@ -11,6 +11,7 @@ the in-process record or to the RQ job's metadata depending on who is running.
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Any
 
 from app.jobs.progress import report
@@ -19,10 +20,17 @@ from app.schemas.pipeline import PipelineRequest
 from app.services import backtest as backtest_service
 from app.services import pipeline as pipeline_service
 
+
+def report_progress(fraction: float, message: str) -> None:
+    """Named wrapper so task bodies read the same whichever backend runs them."""
+    report(fraction, message)
+
+
 #: Dotted paths. Routers reference these rather than retyping the strings, so a
 #: rename cannot silently break enqueueing.
 RUN_PIPELINE = "app.tasks.run_pipeline"
 RUN_BACKTEST = "app.tasks.run_backtest"
+RUN_INGEST = "app.tasks.run_ingest"
 
 
 def run_pipeline(request: dict[str, Any]) -> dict[str, Any]:
@@ -88,3 +96,36 @@ def run_backtest(request: dict[str, Any]) -> dict[str, Any]:
     )
     report(1.0, "complete")
     return response.model_dump(mode="json")
+
+
+def run_ingest(request: dict[str, Any]) -> dict[str, Any]:
+    """Download OHLCV into the Parquet store for a serialised :class:`IngestRequest`."""
+    from app.schemas.data import IngestRequest, IngestResponse, Revision
+    from app.services import market_data
+    from app.settings import get_settings
+
+    parsed = IngestRequest.model_validate(request)
+    settings = get_settings()
+    start = parsed.start or dt.date.fromisoformat(settings.start_date)
+    end = parsed.end or dt.date.fromisoformat(settings.end_date)
+
+    report = market_data.ingest(parsed.tickers, start, end, on_progress=report_progress)
+
+    revisions = report.revisions.head(100)
+    return IngestResponse(
+        tickers=report.tickers,
+        rows_written=report.rows_written,
+        rows_added=report.rows_added,
+        rows_revised=report.rows_revised,
+        revised_tickers=report.revised_tickers,
+        revisions=[
+            Revision(
+                ticker=row["ticker"],
+                date=str(row["date"]),
+                old_adj_close=float(row["old_adj_close"]),
+                new_adj_close=float(row["new_adj_close"]),
+            )
+            for row in revisions.iter_rows(named=True)
+        ],
+        ingested_at=report.ingested_at.isoformat(),
+    ).model_dump(mode="json")
