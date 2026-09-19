@@ -25,7 +25,7 @@ RUN npx tsc --noEmit && npx vite build
 # --- runtime -------------------------------------------------------------
 # The unprivileged image listens on 8080 and runs as uid 101, which matches the
 # API image's refusal to run anything as root.
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 
 COPY --chown=nginx:nginx nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder --chown=nginx:nginx /app/dist /usr/share/nginx/html
