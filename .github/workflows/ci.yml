@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -179,7 +179,7 @@ jobs:
       - name: Load the images built upstream
         run: gunzip -c /tmp/images.tar.gz | docker load
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
