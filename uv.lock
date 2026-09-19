@@ -798,7 +798,7 @@ requires-dist = [
     { name = "tensorflow-cpu", marker = "extra == 'keras'", specifier = ">=2.17" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.4" },
     { name = "torch", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.53.0" },
     { name = "yfinance", specifier = ">=0.2.40" },
 ]
 provides-extras = ["keras"]
