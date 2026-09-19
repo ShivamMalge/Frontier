@@ -17,7 +17,7 @@ Ticker = Annotated[
 
 
 class StrategyName(StrEnum):
-    """Optimizer outputs. Values match the historical CSV column names."""
+    """Optimizer outputs. The first six values match the historical CSV columns."""
 
     MARKOWITZ_MAX_SHARPE = "Markowitz_MaxSharpe"
     MARKOWITZ_MIN_VAR = "Markowitz_MinVar"
@@ -25,6 +25,11 @@ class StrategyName(StrEnum):
     GMV = "GMV"
     HRP = "HRP"
     GERBER_INV_VAR = "Gerber_InvVar"
+    # Added in Phase 4, once Riskfolio-Lib made them a few lines each.
+    HRP_CVAR = "HRP_CVaR"
+    GERBER_HRP = "Gerber_HRP"
+    MIN_CVAR = "MinCVaR"
+    MIN_CDAR = "MinCDaR"
 
 
 class Frame(BaseModel):

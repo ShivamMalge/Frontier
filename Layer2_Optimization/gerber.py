@@ -1,5 +1,18 @@
 # Layer2_Optimization/gerber.py
 
+"""Gerber co-movement statistic, implemented from scratch.
+
+Superseded in Phase 4 and no longer called by the API, the CLI or the Streamlit
+app -- ``optimizer_master`` now dispatches to ``convex`` (cvxpy) and
+``riskfolio_strategies`` (Riskfolio-Lib). Kept because its tests encode the
+defects found during the audit, which is worth preserving as documentation.
+Safe to delete once that history is no longer useful.
+
+This is *not* the published Gerber statistic: it thresholds on ``sign(r)`` rather
+than on moves exceeding +/- c * sigma, rescales by ``(p - 0.5) / 0.5``, and offers no
+positive semi-definiteness guarantee. ``riskfolio_strategies.gerber_covariance``
+uses the real definition.
+"""
 import numpy as np
 import pandas as pd
 

@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.common import Frame, StrategyName, TickerError
 from app.schemas.forecast import ForecastRequest, TickerForecastMetrics
-from app.schemas.portfolio import StrategyPerformance
+from app.schemas.portfolio import ConstraintSpec, StrategyPerformance
 
 
 class PipelineRequest(ForecastRequest):
@@ -20,6 +20,7 @@ class PipelineRequest(ForecastRequest):
         le=1.0,
         description="0 selects the lowest-volatility strategy, 1 the highest.",
     )
+    constraints: ConstraintSpec = Field(default_factory=ConstraintSpec)
 
 
 class PipelineResult(BaseModel):

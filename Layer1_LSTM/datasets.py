@@ -86,10 +86,8 @@ def build_split(
     prices = prices.astype(float).dropna()
     features = build_features(prices, lags=lags)
 
-    if target == "return":
-        targets = prices.pct_change().shift(-1)
-    else:
-        targets = prices.shift(-1)
+    # Shifted back one step: the value on row t is what happens between t and t+1.
+    targets = prices.pct_change().shift(-1) if target == "return" else prices.shift(-1)
 
     frame = features.copy()
     frame["__target__"] = targets

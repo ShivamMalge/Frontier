@@ -63,7 +63,9 @@ def test_submitted_run_is_queued_then_executed_by_a_worker(redis_client, connect
 
     result = body["result"]
     assert result["tickers"] == TICKERS
-    assert len(result["performance"]) == 6
+    from app.services.optimization import ALL_STRATEGIES
+
+    assert len(result["performance"]) == len(ALL_STRATEGIES)
     assert result["selected_strategy"] in result["weights"]["columns"]
     assert sum(result["selected_weights"].values()) == pytest.approx(1.0, abs=1e-9)
 

@@ -146,5 +146,7 @@ def test_full_pipeline_crosses_the_process_boundary(store, redis_url):
 
     result = done.result
     assert result["tickers"] == ["AAA", "BBB", "CCC"]
-    assert len(result["performance"]) == 6
+    from app.services.optimization import ALL_STRATEGIES
+
+    assert len(result["performance"]) == len(ALL_STRATEGIES)
     assert result["selected_strategy"] in result["weights"]["columns"]

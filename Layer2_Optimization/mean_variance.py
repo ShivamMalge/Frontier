@@ -1,5 +1,16 @@
 # Layer2_Optimization/mean_variance.py
 
+"""Mean-variance optimizers solved with SLSQP.
+
+Superseded in Phase 4 and no longer called by the API, the CLI or the Streamlit
+app -- ``optimizer_master`` now dispatches to ``convex`` (cvxpy) and
+``riskfolio_strategies`` (Riskfolio-Lib). Kept because its tests encode the
+defects found during the audit, which is worth preserving as documentation.
+Safe to delete once that history is no longer useful.
+
+SLSQP reported success without converging on some inputs; ``_checked`` was added
+in Phase 1 to fall back to equal weights and warn rather than return garbage.
+"""
 import numpy as np
 from scipy.optimize import minimize
 

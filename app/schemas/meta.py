@@ -45,10 +45,19 @@ class UniverseResponse(BaseModel):
 class StrategyInfo(BaseModel):
     name: StrategyName
     label: str = Field(description="Human-readable name for display.")
-    family: str = Field(description="Broad category, e.g. 'mean-variance' or 'risk-based'.")
+    family: str = Field(
+        description="Broad category: mean-variance, risk-based, hierarchical, "
+        "robust-covariance or tail-risk."
+    )
+    solver: str = Field(description="Library that solves it: 'cvxpy' or 'riskfolio'.")
     long_only: bool = Field(description="Whether weights are constrained to be non-negative.")
     uses_expected_returns: bool = Field(
-        description="False for risk-only optimizers, which ignore the return forecast."
+        description="False for risk-only optimizers, which ignore the return forecast. "
+        "True for exactly one of the ten strategies."
+    )
+    respects_constraints: bool = Field(
+        description="False where the strategy's own construction determines every weight, "
+        "leaving no freedom for caller-supplied bounds; such requests return a warning."
     )
     description: str
 

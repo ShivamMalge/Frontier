@@ -54,7 +54,10 @@ def run(request: PipelineRequest, report: Progress | None = None) -> PipelineRes
     predicted_returns = outcome.predicted_returns()
     strategies = [s.value for s in request.strategies] if request.strategies else None
     weights, warnings = optimization.optimize(
-        predicted_returns, strategies, request.risk_free_rate
+        predicted_returns,
+        strategies,
+        request.risk_free_rate,
+        request.constraints.to_domain(),
     )
 
     report(0.92, "scoring portfolios")

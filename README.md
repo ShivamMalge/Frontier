@@ -5,9 +5,9 @@
 Forecast equity prices, optimize portfolios across six strategies, and compare
 their risk-adjusted performance.
 
-**Migration status: Phases 1–3 of 10 complete** — FastAPI + Pydantic service
-layer, RQ + Redis job queue, PyTorch + LightGBM forecasting.
-See [Migration roadmap](#migration-roadmap).
+**Migration status: Phases 1–4 of 10 complete** — FastAPI + Pydantic service
+layer, RQ + Redis job queue, PyTorch + LightGBM forecasting, cvxpy +
+Riskfolio-Lib optimizers. See [Migration roadmap](#migration-roadmap).
 
 ---
 
@@ -279,12 +279,15 @@ Layer1_LSTM/          forecasting (name is historical, not LSTM-only)
     scaling.py        scalers fitted on training data only
     results.py        SeriesForecast
     train_lstm.py     legacy Keras path
-Layer2_Optimization/  the six optimizers + dispatch
+Layer2_Optimization/  ten strategies + dispatch
+    convex.py         cvxpy: min-var, max-Sharpe, risk parity, frontier
+    riskfolio_strategies.py  HRP, Gerber, CVaR, CDaR
+    constraints.py    box, leverage, group and turnover limits
 Layer3_Portfolio_Generation/  construction, performance, selection
 Layer4_Visualization/ dead matplotlib code -- superseded, see below
 Layer5_Streamlit_App/ interim UI (Phase 9 replaces it)
 utils/                config, logging, filesystem helpers
-tests/                123 tests, no network access
+tests/                201 tests, no network access
 ```
 
 Dependencies point one way: `app` → `Layer*` → `utils`. Nothing in the numerical
@@ -295,38 +298,124 @@ implementation and cannot drift apart.
 
 ## Strategies
 
-| Strategy | Family | Long-only | Uses return forecast |
-|----------|--------|-----------|----------------------|
-| `Markowitz_MaxSharpe` | mean-variance | yes | **yes** |
-| `Markowitz_MinVar` | mean-variance | yes | no |
-| `RiskParity` | risk-based | yes | no |
-| `GMV` | mean-variance | no | no |
-| `HRP` | risk-based | yes | no |
-| `Gerber_InvVar` | robust-covariance | yes | no |
+Ten strategies, solved by cvxpy (convex) or Riskfolio-Lib (hierarchical,
+robust-covariance, tail-risk). `GET /api/v1/meta/strategies` returns this table
+with descriptions.
 
-Worth knowing: only max-Sharpe uses the forecast at all. The other five depend
-solely on the covariance matrix, so a better forecasting model cannot improve
-them. `GMV` and `Markowitz_MinVar` are the same objective — the only difference
-is that GMV permits short positions.
+| Strategy | Family | Solver | Long-only | Uses forecast | Honours constraints |
+|---|---|---|---|---|---|
+| `Markowitz_MaxSharpe` | mean-variance | cvxpy | yes | **yes** | yes |
+| `Markowitz_MinVar` | mean-variance | cvxpy | yes | no | yes |
+| `RiskParity` | risk-based | cvxpy | yes | no | no |
+| `GMV` | mean-variance | cvxpy | **no** | no | yes |
+| `HRP` | hierarchical | riskfolio | yes | no | no |
+| `HRP_CVaR` | hierarchical | riskfolio | yes | no | no |
+| `Gerber_InvVar` | robust-covariance | riskfolio | yes | no | no |
+| `Gerber_HRP` | robust-covariance | riskfolio | yes | no | no |
+| `MinCVaR` | tail-risk | riskfolio | yes | no | yes |
+| `MinCDaR` | tail-risk | riskfolio | yes | no | yes |
 
----
+Worth knowing: **only `Markowitz_MaxSharpe` uses the return forecast.** The other
+nine depend solely on the covariance matrix or the return distribution, so a better
+forecasting model cannot improve them. `GMV` and `Markowitz_MinVar` are the same
+objective — the only difference is that GMV permits shorts.
+
+### Measured on real data
+
+AAPL / MSFT / ADBE / AMD / JPM / GS / PFE / JNJ / LMT / BA, 2018–2022, 1258 trading
+days. All ten solved in **2.4 s**. `rc spread` is the gap between the largest and
+smallest risk contribution — zero means true risk parity.
+
+| Strategy | Return | Vol | Sharpe | Sortino | Max DD | Gross | Held | rc spread |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `Markowitz_MaxSharpe` | 29.10% | 27.70% | **1.050** | 1.520 | −31.78% | 1.00 | 5 | 0.4580 |
+| `Markowitz_MinVar` | 12.55% | 18.99% | 0.661 | 0.931 | −29.11% | 1.00 | 7 | 0.5233 |
+| `RiskParity` | 17.95% | 22.56% | 0.796 | 1.117 | −33.39% | 1.00 | 10 | **0.0000** |
+| `GMV` | 12.81% | **18.85%** | 0.680 | 0.967 | −27.11% | 1.17 | 10 | 0.5642 |
+| `HRP` | 16.00% | 20.49% | 0.781 | 1.101 | −31.91% | 1.00 | 10 | 0.1698 |
+| `HRP_CVaR` | 17.57% | 21.74% | 0.808 | 1.138 | −32.70% | 1.00 | 10 | 0.0792 |
+| `Gerber_InvVar` | 16.78% | 21.35% | 0.786 | 1.109 | −32.12% | 1.00 | 10 | 0.1103 |
+| `Gerber_HRP` | 15.79% | 20.46% | 0.772 | 1.088 | −32.14% | 1.00 | 10 | 0.1752 |
+| `MinCVaR` | 12.92% | 19.26% | 0.671 | 0.952 | −29.56% | 1.00 | 5 | 0.3527 |
+| `MinCDaR` | 13.94% | 20.27% | 0.688 | 0.983 | **−26.56%** | 1.00 | 4 | 0.6899 |
+
+Three of those numbers are the Phase 4 fixes showing up:
+
+- **`RiskParity` reaches an rc spread of exactly 0.0000.** Before Phase 4 it
+  silently returned equal weights, whose risk contributions are nothing like equal.
+- **`MinCDaR` has the shallowest drawdown**, which is precisely what conditional
+  drawdown-at-risk minimises. No prior strategy targeted the path of losses.
+- **`GMV` is the only one with gross exposure above 1.0** (1.17), confirming it is
+  the short-permitting twin of `Markowitz_MinVar` and nothing more.
+
+### Constraints
+
+`POST /portfolio/optimize` and `POST /pipeline/runs` accept a `constraints` object.
+This is the practical reason for leaving `scipy.optimize`: each of these is a linear
+inequality the solver satisfies exactly or declares infeasible, rather than another
+hand-written callback that may quietly fail to converge.
+
+| Field | Meaning |
+|---|---|
+| `min_weight` / `max_weight` | Per-asset box. Negative `min_weight` permits shorts. |
+| `max_leverage` | Cap on gross exposure `sum |w|`. 1.3 is a 130/30 mandate. |
+| `group_caps` / `group_floors` | Named ceilings and floors, e.g. `{"banks": [["JPM","GS"], 0.2]}`. |
+| `max_turnover` + `previous_weights` | Cap on `sum |w − w_prev|`. |
+
+Same universe, `Markowitz_MinVar` only:
+
+| Case | Vol | Max weight | Gross | Banks | Turnover |
+|---|---:|---:|---:|---:|---:|
+| unconstrained | 18.99% | 52.33% | 1.00 | 5.14% | 1.169 |
+| `max_weight` 15% | 21.47% | **15.00%** | 1.00 | 24.50% | 0.523 |
+| banks cap 20% | 18.99% | 52.33% | 1.00 | 5.14% | 1.169 |
+| 130/30 short mandate | 18.85% | 50.71% | **1.17** | 10.06% | 1.171 |
+| `max_turnover` 10% | 23.63% | 15.00% | 1.00 | 20.00% | **0.100** |
+
+Each limit is hit exactly. The banks cap row is unchanged because the unconstrained
+portfolio already holds only 5.14% in banks — the cap is non-binding, not ignored.
+Note also that constraints cost return: capping weights at 15% raises volatility
+from 18.99% to 21.47%, and a 10% turnover budget raises it to 23.63%.
+
+Strategies marked "honours constraints: no" derive every weight from their own
+construction, leaving nothing to constrain. Passing constraints to those returns a
+**warning naming them** rather than silently ignoring the request.
+
+### Efficient frontier
+
+`POST /api/v1/portfolio/frontier` minimises variance at each of `points` target
+returns between the minimum-variance and maximum-return portfolios, so the curve
+spans exactly what the constraints allow. `tangency_index` marks the max-Sharpe
+point, and a test asserts it agrees with `Markowitz_MaxSharpe` — on the data above,
+both give Sharpe 1.050.
+
+The repo has shipped a `plot_effiecient_frontier.py` since the start. It plotted
+cumulative growth. This computes the actual curve.
 
 ## Known limitations
 
 Carried forward deliberately, each scheduled to a later phase:
 
-- **In-sample optimization** — weights are derived from the forecast over the
-  same window used to score them. There is no walk-forward backtest. *(Phase 4)*
-- **No transaction costs or turnover limits.** Weights are treated as free to
-  reach. *(Phase 4)*
+- **In-sample optimization** — weights are derived over the same window used to
+  score them, so the performance table is not an out-of-sample result. A
+  walk-forward backtest with periodic rebalancing is the remaining gap; the
+  turnover constraint added in Phase 4 is the mechanism it would use. *(pending)*
+- **No transaction costs.** A `max_turnover` budget can be imposed, but trading is
+  not charged for, so reported returns are gross. *(pending)*
 - **One-step-ahead only.** Every backend predicts the next trading day. Multi-horizon
   forecasting is not implemented.
-- **`Gerber_InvVar` discards most of its work** — `gerber_covariance` builds a
-  full matrix in a `d²` Python loop, then inverse-variance weighting reads only
-  the diagonal. The implementation also is not the published Gerber statistic,
-  which thresholds at ±c·σ rather than on raw signs. *(Phase 4, via Riskfolio-Lib)*
+- **`Gerber_InvVar` still reads only the diagonal.** It now uses Riskfolio's
+  published Gerber statistic rather than the old sign-based approximation, but
+  inverse-variance weighting ignores the off-diagonals the statistic exists to
+  estimate. Kept under its original name for continuity; use `Gerber_HRP` instead.
 - **Risk tolerance is a positional pick** along the volatility ranking, not a
   utility-maximising choice.
+- **HERC is not offered.** Riskfolio 7.3.0 raises `TypeError` from its own
+  `_hierarchical_recursive_bisection` for that model regardless of arguments.
+- **Five superseded optimizer modules remain** — `mean_variance.py`,
+  `risk_parity.py`, `gmv.py`, `hrp.py` and `gerber.py` are no longer called by
+  anything. They are kept because their tests encode the defects found during the
+  audit; delete them when that history stops being useful.
 - **`Layer4_Visualization/` is dead code** — four matplotlib `plt.show()`
   functions, imported by nothing, and `plot_effiecient_frontier.py` (sic) plots
   cumulative growth rather than an efficient frontier. Phase 9 supersedes it with
@@ -359,8 +448,8 @@ Phase 6 adds a `parquet` source alongside it.
 | 1 | API | FastAPI + Pydantic | **done** |
 | 2 | Jobs | RQ + Redis | **done** |
 | 3 | Forecasting | PyTorch + LightGBM | **done** |
-| 4 | Optimizers | cvxpy (Clarabel/OSQP) + Riskfolio-Lib | next |
-| 5 | Dataframes | Polars | |
+| 4 | Optimizers | cvxpy (Clarabel/OSQP) + Riskfolio-Lib | **done** |
+| 5 | Dataframes | Polars | next |
 | 6 | Storage | Parquet + DuckDB | |
 | 7 | Tracking | MLflow | |
 | 8 | Packaging | uv + pyproject.toml + Docker | |

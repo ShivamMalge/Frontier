@@ -2,6 +2,13 @@
 
 """Hierarchical Risk Parity (Lopez de Prado, 2016).
 
+NOTE: superseded in Phase 4 and no longer called by the API, the CLI or the
+Streamlit app -- ``optimizer_master`` now dispatches to ``convex`` (cvxpy) and
+``riskfolio_strategies`` (Riskfolio-Lib). Kept because its tests encode the
+defects found during the audit, which is worth preserving as documentation.
+Safe to delete once that history is no longer useful.
+
+
 Three stages: build a correlation-distance linkage, quasi-diagonalise it so
 correlated assets sit adjacent, then split capital by recursive bisection
 weighted by inverse cluster variance.

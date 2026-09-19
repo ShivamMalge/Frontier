@@ -2,6 +2,13 @@
 
 """Equal risk contribution ("risk parity") weights.
 
+NOTE: superseded in Phase 4 and no longer called by the API, the CLI or the
+Streamlit app -- ``optimizer_master`` now dispatches to ``convex`` (cvxpy) and
+``riskfolio_strategies`` (Riskfolio-Lib). Kept because its tests encode the
+defects found during the audit, which is worth preserving as documentation.
+Safe to delete once that history is no longer useful.
+
+
 Solved through the convex log-barrier reformulation of Maillard, Roncalli and
 Teiletche (2010):
 

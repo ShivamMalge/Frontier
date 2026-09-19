@@ -17,6 +17,10 @@ from app.schemas.meta import (
 )
 from app.schemas.pipeline import PipelineRequest, PipelineResult
 from app.schemas.portfolio import (
+    ConstraintSpec,
+    FrontierPointOut,
+    FrontierRequest,
+    FrontierResponse,
     OptimizeRequest,
     OptimizeResponse,
     PerformanceRequest,
@@ -25,7 +29,11 @@ from app.schemas.portfolio import (
 )
 
 __all__ = [
+    "ConstraintSpec",
     "Frame",
+    "FrontierPointOut",
+    "FrontierRequest",
+    "FrontierResponse",
     "ForecastBackend",
     "ForecastRequest",
     "ForecastResponse",

@@ -10,14 +10,9 @@ def test_optimize_returns_normalised_weights_for_every_strategy(client, returns_
         "/api/v1/portfolio/optimize", json={"returns": returns_frame}
     ).json()
 
-    assert set(body["weights"]["columns"]) == {
-        "Markowitz_MaxSharpe",
-        "Markowitz_MinVar",
-        "RiskParity",
-        "GMV",
-        "HRP",
-        "Gerber_InvVar",
-    }
+    from app.services.optimization import ALL_STRATEGIES
+
+    assert set(body["weights"]["columns"]) == set(ALL_STRATEGIES)
     assert body["weights"]["index"] == ["AAA", "BBB", "CCC", "DDD"]
 
     columns = body["weights"]["columns"]
@@ -82,7 +77,9 @@ def test_performance_produces_plausible_annualised_statistics(client, returns_fr
         json={"returns": returns_frame, "weights": weights},
     ).json()
 
-    assert len(body["performance"]) == 6
+    from app.services.optimization import ALL_STRATEGIES
+
+    assert len(body["performance"]) == len(ALL_STRATEGIES)
     for row in body["performance"]:
         # The original code annualised price levels and produced returns in the
         # tens of thousands; these bounds would have caught it immediately.
@@ -122,3 +119,149 @@ def test_performance_aligns_on_tickers_not_position(client, returns_frame):
     for left, right in zip(baseline, reordered, strict=True):
         for field in ("annual_return", "annual_volatility", "sharpe", "sortino", "max_drawdown"):
             assert left[field] == pytest.approx(right[field], rel=1e-12), (field, left, right)
+
+
+class TestConstraintsThroughTheApi:
+    """Constraints are the practical payoff of moving from SLSQP to cvxpy."""
+
+    def test_weight_cap_is_applied(self, client, returns_frame):
+        body = client.post(
+            "/api/v1/portfolio/optimize",
+            json={
+                "returns": returns_frame,
+                "strategies": ["Markowitz_MinVar"],
+                "constraints": {"max_weight": 0.30},
+            },
+        ).json()
+        weights = [row[0] for row in body["weights"]["data"]]
+        assert max(weights) <= 0.30 + 1e-6
+        assert sum(weights) == pytest.approx(1.0, abs=1e-6)
+
+    def test_group_cap_is_applied(self, client, returns_frame):
+        body = client.post(
+            "/api/v1/portfolio/optimize",
+            json={
+                "returns": returns_frame,
+                "strategies": ["Markowitz_MinVar"],
+                "constraints": {"group_caps": {"pair": [["AAA", "BBB"], 0.25]}},
+            },
+        ).json()
+        index = body["weights"]["index"]
+        weights = {t: row[0] for t, row in zip(index, body["weights"]["data"], strict=True)}
+        assert weights["AAA"] + weights["BBB"] <= 0.25 + 1e-6
+
+    def test_turnover_limit_is_applied(self, client, returns_frame):
+        previous = {"AAA": 0.25, "BBB": 0.25, "CCC": 0.25, "DDD": 0.25}
+        body = client.post(
+            "/api/v1/portfolio/optimize",
+            json={
+                "returns": returns_frame,
+                "strategies": ["Markowitz_MinVar"],
+                "constraints": {"max_turnover": 0.10, "previous_weights": previous},
+            },
+        ).json()
+        index = body["weights"]["index"]
+        weights = {t: row[0] for t, row in zip(index, body["weights"]["data"], strict=True)}
+        moved = sum(abs(weights[t] - previous[t]) for t in previous)
+        assert moved <= 0.10 + 1e-6
+
+    def test_short_selling_mandate(self, client, returns_frame):
+        body = client.post(
+            "/api/v1/portfolio/optimize",
+            json={
+                "returns": returns_frame,
+                "strategies": ["Markowitz_MinVar"],
+                "constraints": {"min_weight": -0.3, "max_leverage": 1.3},
+            },
+        ).json()
+        weights = [row[0] for row in body["weights"]["data"]]
+        assert sum(weights) == pytest.approx(1.0, abs=1e-6)
+        assert sum(abs(w) for w in weights) <= 1.3 + 1e-6
+
+    def test_impossible_constraints_are_rejected_before_solving(self, client, returns_frame):
+        """A clear message beats a generic solver infeasibility."""
+        response = client.post(
+            "/api/v1/portfolio/optimize",
+            json={"returns": returns_frame, "constraints": {"max_weight": 0.1}},
+        )
+        assert response.status_code == 422
+        assert "cannot reach 1.0" in response.text
+
+    def test_turnover_without_previous_weights_is_rejected(self, client, returns_frame):
+        response = client.post(
+            "/api/v1/portfolio/optimize",
+            json={"returns": returns_frame, "constraints": {"max_turnover": 0.2}},
+        )
+        assert response.status_code == 422
+
+    def test_strategies_that_cannot_honour_constraints_say_so(self, client, returns_frame):
+        """Silence would be worse: the caller would assume the cap was applied."""
+        body = client.post(
+            "/api/v1/portfolio/optimize",
+            json={
+                "returns": returns_frame,
+                "strategies": ["RiskParity", "HRP"],
+                "constraints": {"max_weight": 0.30},
+            },
+        ).json()
+        assert body["warnings"]
+        assert any("RiskParity" in w for w in body["warnings"])
+        assert any("HRP" in w for w in body["warnings"])
+
+
+class TestEfficientFrontier:
+    """The project shipped a plot_efficient_frontier module that never computed one."""
+
+    def test_returns_an_upward_sloping_curve(self, client, returns_frame):
+        body = client.post(
+            "/api/v1/portfolio/frontier", json={"returns": returns_frame, "points": 20}
+        ).json()
+
+        points = body["points"]
+        assert len(points) >= 15
+        for earlier, later in zip(points, points[1:], strict=False):
+            assert earlier["expected_return"] <= later["expected_return"] + 1e-9
+            assert earlier["volatility"] <= later["volatility"] + 1e-6
+
+    def test_every_point_is_fully_invested(self, client, returns_frame):
+        body = client.post(
+            "/api/v1/portfolio/frontier", json={"returns": returns_frame, "points": 10}
+        ).json()
+        for point in body["points"]:
+            assert sum(point["weights"].values()) == pytest.approx(1.0, abs=1e-6)
+            assert set(point["weights"]) == set(body["tickers"])
+
+    def test_tangency_index_marks_the_best_sharpe(self, client, returns_frame):
+        body = client.post(
+            "/api/v1/portfolio/frontier", json={"returns": returns_frame, "points": 30}
+        ).json()
+        sharpes = [p["sharpe"] for p in body["points"]]
+        assert body["tangency_index"] == sharpes.index(max(sharpes))
+
+    def test_tangency_point_matches_the_max_sharpe_strategy(self, client, returns_frame):
+        """Markowitz_MaxSharpe is defined as this point, so they must agree."""
+        frontier = client.post(
+            "/api/v1/portfolio/frontier", json={"returns": returns_frame, "points": 60}
+        ).json()
+        tangency = frontier["points"][frontier["tangency_index"]]["weights"]
+
+        optimised = client.post(
+            "/api/v1/portfolio/optimize",
+            json={"returns": returns_frame, "strategies": ["Markowitz_MaxSharpe"]},
+        ).json()
+        index = optimised["weights"]["index"]
+        weights = {t: row[0] for t, row in zip(index, optimised["weights"]["data"], strict=True)}
+
+        for ticker, weight in weights.items():
+            assert weight == pytest.approx(tangency[ticker], abs=1e-4)
+
+    def test_constraints_narrow_the_frontier(self, client, returns_frame):
+        def top_return(payload: dict) -> float:
+            body = client.post("/api/v1/portfolio/frontier", json=payload).json()
+            return body["points"][-1]["expected_return"]
+
+        wide = top_return({"returns": returns_frame, "points": 20})
+        capped = top_return(
+            {"returns": returns_frame, "points": 20, "constraints": {"max_weight": 0.3}}
+        )
+        assert capped <= wide + 1e-9

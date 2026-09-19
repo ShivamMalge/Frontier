@@ -58,7 +58,9 @@ def test_completed_run_produces_a_coherent_result(client, window):
     assert result["tickers"] == TICKERS
     assert result["backend"] == "naive"
     assert len(result["forecast_metrics"]) == len(TICKERS)
-    assert len(result["performance"]) == 6
+    from app.services.optimization import ALL_STRATEGIES
+
+    assert len(result["performance"]) == len(ALL_STRATEGIES)
 
     assert result["selected_strategy"] in result["weights"]["columns"]
     assert sum(result["selected_weights"].values()) == pytest.approx(1.0, abs=1e-9)

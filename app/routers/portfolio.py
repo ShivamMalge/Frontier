@@ -11,6 +11,9 @@ from fastapi import APIRouter
 
 from app.schemas.common import Frame
 from app.schemas.portfolio import (
+    FrontierPointOut,
+    FrontierRequest,
+    FrontierResponse,
     OptimizeRequest,
     OptimizeResponse,
     PerformanceRequest,
@@ -38,7 +41,7 @@ def optimize(request: OptimizeRequest) -> OptimizeResponse:
     strategies = [s.value for s in request.strategies] if request.strategies else None
 
     weights, warnings = optimization.optimize(
-        returns, strategies, request.risk_free_rate
+        returns, strategies, request.risk_free_rate, request.constraints.to_domain()
     )
     return OptimizeResponse(
         tickers=[str(t) for t in weights.index],
@@ -85,4 +88,49 @@ def evaluate(request: PerformanceRequest) -> PerformanceResponse:
         ],
         portfolio_returns=Frame.from_pandas(portfolio_returns),
         cumulative_growth=Frame.from_pandas(cumulative),
+    )
+
+
+@router.post(
+    "/frontier",
+    response_model=FrontierResponse,
+    summary="Trace the efficient frontier",
+    description=(
+        "Minimises variance at each of `points` target returns between the "
+        "minimum-variance and maximum-return portfolios, so the curve spans exactly "
+        "what the supplied constraints allow. `tangency_index` marks the max-Sharpe "
+        "point, which is what `Markowitz_MaxSharpe` returns."
+    ),
+)
+def frontier(request: FrontierRequest) -> FrontierResponse:
+    settings = get_settings()
+    returns = _to_pandas(request.returns)
+    assets = [str(column) for column in returns.columns]
+
+    points = optimization.frontier(
+        returns,
+        constraints=request.constraints.to_domain(),
+        points=request.points,
+        risk_free_rate=request.risk_free_rate,
+    )
+
+    best = max(range(len(points)), key=lambda i: points[i].sharpe)
+    return FrontierResponse(
+        tickers=assets,
+        observations=len(returns),
+        risk_free_rate=(
+            settings.risk_free_rate
+            if request.risk_free_rate is None
+            else request.risk_free_rate
+        ),
+        points=[
+            FrontierPointOut(
+                expected_return=point.expected_return,
+                volatility=point.volatility,
+                sharpe=point.sharpe,
+                weights=dict(zip(assets, point.weights.tolist(), strict=True)),
+            )
+            for point in points
+        ],
+        tangency_index=best,
     )
