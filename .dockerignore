@@ -1,0 +1,33 @@
+# Build context hygiene. The venvs alone are 4 GB; sending them would dominate
+# the build time and they are rebuilt from uv.lock anyway.
+.venv/
+venv/
+env/
+.git/
+.gitignore
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Runtime artefacts belong in a volume, not in the image.
+data/
+mlruns/
+mlflow.db
+*.parquet
+*.h5
+*.keras
+
+# Not needed to build or run the service.
+tests/
+Layer4_Visualization/
+Dockerfile
+.dockerignore
+compose.yaml
+
+.vscode/
+.idea/
+.DS_Store
+.env

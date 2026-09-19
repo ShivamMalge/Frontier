@@ -1,0 +1,123 @@
+# Packaging for Frontier (Phase 8 of the migration).
+#
+# This file replaces requirements.txt. The dependency sets are:
+#
+#   [project.dependencies]        everything the API, the CLI and the tests need
+#   [project.optional-dependencies]
+#       keras   the legacy TensorFlow backend, kept only to reproduce the
+#               original result; ~600 MB, and the backend disappears from
+#               /health cleanly when it is absent
+#       ui      the interim Streamlit app (Phase 9 replaces it with React)
+#   [dependency-groups]
+#       dev     test and lint tooling; installed by `uv sync`, never shipped
+#
+# Installing:
+#   uv sync                 # runtime + dev, the working set for development
+#   uv sync --no-dev        # runtime only, what the Docker image builds
+#   uv sync --extra keras   # add the legacy backend
+#   uv sync --all-extras    # everything
+
+[project]
+name = "frontier"
+version = "0.1.0"
+description = "LSTM forecasting and portfolio optimization across six strategies."
+readme = "README.md"
+# Upper-bounded deliberately: the `keras` extra has no 3.13+ wheels, and 3.13 is
+# untested for the rest. Raise it once the whole set is verified there.
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    # --- API ---
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.4",
+    # --- jobs ---
+    "rq>=2.0",
+    "redis>=5.0",
+    # --- dataframes and storage ---
+    "polars>=1.0",
+    "pyarrow>=15.0",
+    "duckdb>=1.0",
+    # --- numerical core ---
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "scipy>=1.14",
+    "scikit-learn>=1.5",
+    # --- optimization ---
+    "cvxpy>=1.5",
+    "clarabel>=0.9",
+    "osqp>=0.6",
+    "riskfolio-lib>=7.0",
+    # --- market data ---
+    "yfinance>=0.2.40",
+    # --- forecasting ---
+    # torch resolves to the CPU wheel on Linux and Windows; see [tool.uv.sources].
+    "torch>=2.4",
+    "lightgbm>=4.3",
+    # --- experiment tracking ---
+    # The full package, not mlflow-skinny: skinny cannot use a database backend,
+    # and MLflow 3 has put the filesystem backend into maintenance mode.
+    "mlflow>=3.0",
+]
+
+[project.optional-dependencies]
+keras = ["tensorflow-cpu>=2.17"]
+ui = ["streamlit>=1.38"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    # In-process Redis fake: covers the RQ protocol without a server.
+    "fakeredis>=2.20",
+    # Bundles a real Redis server, so the multi-process worker tests can run
+    # without Docker or root. tests/test_worker_process.py skips without it.
+    "redislite>=6.0",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+frontier = "app.cli:run"
+frontier-worker = "app.worker:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Layer4_Visualization/ and Layer5_Streamlit_App/ are scripts, not packages (no
+# __init__.py, imported by nothing), so they stay out of the wheel. Run the
+# Streamlit app from a checkout until Phase 9 replaces it.
+packages = [
+    "app",
+    "utils",
+    "Layer1_LSTM",
+    "Layer1_Preprocessing",
+    "Layer2_Optimization",
+    "Layer3_Portfolio_Generation",
+]
+
+# A plain `pip install torch` pulls the CUDA build: ~2.5 GB of wheels that this
+# project never uses, since every model here trains on CPU. The explicit index
+# below is the fix, and it is why the old requirements.txt carried a comment
+# telling you to pass --index-url by hand.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+# macOS has no separate CPU wheel -- the default PyPI build is already CPU-only.
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = [
+    "error::DeprecationWarning:app.*",
+    "error::DeprecationWarning:Layer*",
+    # Starlette's TestClient still imports httpx 1.x; not our call to make.
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]

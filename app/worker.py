@@ -1,6 +1,7 @@
 """RQ worker entry point.
 
-    python -m app.worker                    # one worker on the default queue
+    frontier-worker                         # one worker on the default queue
+    python -m app.worker                    # the same thing, without an install
     python -m app.worker --queues pipeline  # explicit queue
     python -m app.worker --burst            # drain the queue, then exit (for CI)
 
@@ -25,7 +26,9 @@ logger = logging.getLogger("app.worker")
 
 def build_parser() -> argparse.ArgumentParser:
     settings = get_settings()
-    parser = argparse.ArgumentParser(prog="app.worker", description="Run an RQ worker.")
+    parser = argparse.ArgumentParser(
+        prog="frontier-worker", description="Run an RQ worker."
+    )
     parser.add_argument("--queues", nargs="+", default=[settings.queue_name])
     parser.add_argument("--url", default=settings.redis_url)
     parser.add_argument(
@@ -59,5 +62,10 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def run() -> None:
+    """Console-script entry point (``frontier-worker``)."""
     sys.exit(main())
+
+
+if __name__ == "__main__":
+    run()

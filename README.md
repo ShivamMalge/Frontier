@@ -5,26 +5,27 @@
 Forecast equity prices, optimize portfolios across six strategies, and compare
 their risk-adjusted performance.
 
-**Migration status: Phases 1–7 of 10 complete**, plus walk-forward backtesting —
+**Migration status: Phases 1–8 of 10 complete**, plus walk-forward backtesting —
 FastAPI + Pydantic service layer, RQ + Redis job queue, PyTorch + LightGBM
 forecasting, cvxpy + Riskfolio-Lib optimizers, Polars data pipeline, Parquet +
-DuckDB price store, MLflow tracking. See [Migration roadmap](#migration-roadmap).
+DuckDB price store, MLflow tracking, uv + Docker packaging. See
+[Migration roadmap](#migration-roadmap).
 
 ---
 
 ## Quick start
 
-Requires Python 3.12 (TensorFlow has no 3.13+ wheels) and [uv](https://docs.astral.sh/uv/).
+Requires [uv](https://docs.astral.sh/uv/). It installs Python 3.12 itself, so
+nothing else is a prerequisite.
 
 ```bash
-uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python -r requirements.txt
+uv sync                  # .venv with runtime + dev dependencies, from uv.lock
 ```
 
 Run the API:
 
 ```bash
-.venv/bin/python -m uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 ```
 
 Interactive docs at <http://127.0.0.1:8000/docs>.
@@ -33,7 +34,7 @@ Run a worker (needs Redis — see [Jobs](#jobs)):
 
 ```bash
 docker run -d -p 6379:6379 redis:7-alpine     # or: sudo pacman -S redis && sudo systemctl start redis
-.venv/bin/python -m app.worker
+uv run frontier-worker
 ```
 
 Without Redis the API still works: it falls back to an in-process queue and says
@@ -42,14 +43,26 @@ so in `GET /health`.
 Run the CLI:
 
 ```bash
-.venv/bin/python main.py --tickers AAPL MSFT JPM --backend naive
+uv run frontier --tickers AAPL MSFT JPM --backend naive
 ```
 
 Run the tests:
 
 ```bash
-.venv/bin/python -m pytest
+uv run pytest
 ```
+
+Or bring up API, worker and Redis together:
+
+```bash
+docker compose up --build
+```
+
+`uv run <cmd>` syncs the environment first, so it is always in step with
+`uv.lock`. `.venv/bin/<cmd>` works too once `uv sync` has run. Two dependency
+sets are optional and left out by default — the legacy TensorFlow backend
+(`--extra keras`) and the interim Streamlit UI (`--extra ui`); see
+[Packaging](#packaging).
 
 ---
 
@@ -187,8 +200,8 @@ Two interchangeable backends sit behind one protocol:
 Select with `SO_JOB_BACKEND`:
 
 - **`auto`** (default) — try Redis, fall back to memory if unreachable. Keeps
-  `pytest` and `python main.py` working on a bare checkout. The fallback is logged
-  as a warning, never silent.
+  `uv run pytest` and `uv run frontier` working on a bare checkout. The fallback
+  is logged as a warning, never silent.
 - **`redis`** — require Redis; refuse to start without it. **Use this in
   production**, where quietly degrading to a single-process queue is worse than
   not booting.
@@ -198,10 +211,10 @@ Select with `SO_JOB_BACKEND`:
 
 ```bash
 SO_JOB_BACKEND=redis SO_REDIS_URL=redis://localhost:6379/0 \
-  .venv/bin/python -m uvicorn app.main:app
+  uv run uvicorn app.main:app
 
-.venv/bin/python -m app.worker --queues pipeline    # one per spare core
-.venv/bin/python -m app.worker --burst              # drain and exit (CI)
+uv run frontier-worker --queues pipeline    # one per spare core
+uv run frontier-worker --burst              # drain and exit (CI)
 ```
 
 ### Why jobs are named, not passed
@@ -275,7 +288,8 @@ app/                  FastAPI service (Phase 1)
     redis_store.py    RQ + Redis store
     progress.py       backend-agnostic progress reporting
   tasks.py            functions workers execute, by dotted path
-  worker.py           RQ worker entry point
+  cli.py              the `frontier` command
+  worker.py           the `frontier-worker` command
   settings.py         env-overridable config
   errors.py           domain exceptions -> HTTP
 
@@ -300,6 +314,12 @@ Layer4_Visualization/ dead matplotlib code -- superseded, see below
 Layer5_Streamlit_App/ interim UI (Phase 9 replaces it)
 utils/                config, logging, filesystem helpers
 tests/                321 tests, no network access
+
+pyproject.toml        dependencies, extras, entry points, pytest config
+uv.lock               the resolved set, committed -- 212 packages
+Dockerfile            one image, two roles (API and worker)
+compose.yaml          API + worker + Redis
+main.py               shim so `python main.py` works without an install
 ```
 
 Dependencies point one way: `app` → `Layer*` → `utils`. Nothing in the numerical
@@ -501,7 +521,7 @@ yesterday. A pipeline that re-downloads on every run cannot reproduce its own re
 curl -X POST localhost:8000/api/v1/data/ingest \
   -d '{"tickers":["AAPL","MSFT"],"start":"2010-01-01","end":"2024-01-01"}'
 
-SO_MARKET_DATA_SOURCE=parquet .venv/bin/python -m uvicorn app.main:app
+SO_MARKET_DATA_SOURCE=parquet uv run uvicorn app.main:app
 ```
 
 Prices are ingested once into Parquet, partitioned by ticker, each row stamped with the
@@ -548,8 +568,8 @@ The original project reported "93%+ accuracy" with no record of what was measure
 which data, by which metric, or against what baseline. Off by default:
 
 ```bash
-SO_MLFLOW_ENABLED=true .venv/bin/python -m uvicorn app.main:app
-mlflow ui --backend-store-uri sqlite:///data/mlflow.db
+SO_MLFLOW_ENABLED=true uv run uvicorn app.main:app
+uv run mlflow ui --backend-store-uri sqlite:///data/mlflow.db
 ```
 
 A run records the parameters (including the **seed**), the **git commit**, the
@@ -583,6 +603,101 @@ pipeline warns and finishes with `tracking_run_id: null`. Three tests assert thi
 including one pointing the tracking URI at an uncreatable path. A `None` metric is
 skipped rather than logged as zero — `directional_accuracy` is null for a flat
 forecast, and zero would read as "always wrong" instead of "never guessed".
+
+---
+
+## Packaging
+
+Two files replace the old ad-hoc setup:
+
+| Was | Is now |
+|---|---|
+| `requirements.txt` — version *floors*, resolved fresh on every install | `pyproject.toml` + `uv.lock` — 212 packages pinned with hashes |
+| `pytest.ini` | `[tool.pytest.ini_options]` in `pyproject.toml` |
+
+Four dependency sets, so a deployment installs what it will actually run:
+
+| Set | Install | Holds | Why it is separate |
+|---|---|---|---|
+| runtime | `uv sync --no-dev` | 173 packages: API, jobs, Polars/DuckDB, optimizers, PyTorch, LightGBM, MLflow | what the image ships |
+| `keras` extra | `uv sync --extra keras` | `tensorflow-cpu` | 1.3 GB installed, for the one backend the [measured table](#every-backend-measured-on-real-data) shows is *worse* than a random walk. Absent, it disappears from `/health` and nothing else changes |
+| `ui` extra | `uv sync --extra ui` | `streamlit` | interim UI; Phase 9 deletes it |
+| `dev` group | `uv sync` (the default) | `pytest`, `httpx`, `fakeredis`, `redislite`, `ruff` | never shipped |
+
+`uv sync --all-extras` is the full set — the one the measured table was produced
+on, since it needs `keras_lstm`.
+
+### The lockfile is the point
+
+`uv.lock` is committed, and every install path that matters passes `--locked`,
+which **fails** on a stale lockfile rather than quietly resolving something else.
+So the image cannot contain a dependency set that was never tested, and a
+reviewer can see the exact set in the diff.
+
+### torch comes from the CPU index
+
+Every model here trains on CPU, but `pip install torch` does not know that. The
+default PyPI build resolves to 29 packages, 16 of them `nvidia-*` and `triton`
+wheels. This lockfile contains **none** of them, because `[tool.uv.sources]`
+routes torch to PyTorch's CPU index on Linux and Windows:
+
+```toml
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }]
+```
+
+macOS is excluded on purpose: there is no separate CPU wheel there, the default
+PyPI build already being CPU-only. Previously this was a comment in
+`requirements.txt` telling you to pass `--index-url` by hand, which nobody does.
+
+### Two commands, one image
+
+```toml
+[project.scripts]
+frontier = "app.cli:run"              # the pipeline CLI, was `python main.py`
+frontier-worker = "app.worker:run"    # the RQ worker, was `python -m app.worker`
+```
+
+Both old invocations still work: `main.py` is a shim over `app/cli.py`, and
+`python -m app.worker` is unchanged.
+
+`Dockerfile` builds one image that runs either role, because an API and a worker
+that were built separately would eventually execute different code. It is
+multi-stage:
+
+- dependencies install in a layer keyed on `uv.lock` alone, so editing source
+  does not re-download torch;
+- the project installs `--no-editable`, so the runtime stage copies the virtual
+  environment and no source tree;
+- runtime is `python:3.12-slim` plus `libgomp1` (LightGBM links against it; the
+  torch wheel ships its own), running as uid 10001, not root;
+- `HEALTHCHECK` probes `/health` with `urllib`, so the image needs no `curl`.
+
+The image is **3.9 GB**, which is large for a service and mostly not this
+project's code: torch is 769 MB even as a CPU build, and `riskfolio-lib` pulls
+`vectorbt` → `numba`/`llvmlite` (240 MB), `astropy` (60 MB) and `statsmodels`,
+none of which the optimizers here call directly. Bytecode is precompiled
+(`UV_COMPILE_BYTECODE=1`), trading some of that size for faster cold starts.
+
+`compose.yaml` wires API, worker and Redis:
+
+```bash
+docker compose up --build                  # API on http://127.0.0.1:8000
+docker compose up -d --scale worker=4      # forecasting is CPU-bound; scale by process
+docker compose run --rm api frontier --tickers AAPL MSFT --backend lightgbm
+docker build --build-arg EXTRAS="--extra keras" -t frontier:keras .
+```
+
+Two choices there are deliberate. `SO_JOB_BACKEND=redis`, not `auto`: in a
+container the broker is always supposed to be there, so falling back to the
+in-process queue would hide a broken deployment behind a working `/health`. And
+the API and worker share one named volume, because the worker *writes* the
+Parquet store and the MLflow database that the API then reads.
 
 ---
 
@@ -641,11 +756,30 @@ Carried forward deliberately, each scheduled to a later phase:
   functions, imported by nothing, and `plot_effiecient_frontier.py` (sic) plots
   cumulative growth rather than an efficient frontier. Phase 9 supersedes it with
   ECharts. It is left in place rather than deleted; remove it when you are ready.
-- **`venv/` is a 361 MB Windows virtualenv committed into the repo**, containing
-  only numpy, pandas and streamlit — not TensorFlow, scipy, scikit-learn or
-  yfinance, so it could never have run this project. Delete it:
-  `rm -rf venv/`. *(Phase 8 formalises packaging)*
-- **No git history.** This directory is not a repository. `git init` is Phase 10.
+- **`venv/` is a 361 MB Windows virtualenv left over from the original project.**
+  It is no longer tracked by git, and `.gitignore` keeps it that way, but it is
+  still sitting in the working directory: `rm -rf venv/` when you want the disk
+  back. It contains only numpy, pandas and streamlit — not TensorFlow, scipy,
+  scikit-learn or yfinance — so it could never have run this project.
+- **No CI builds the image.** It was built and run end to end by hand — API
+  healthy, worker executing a queued pipeline run, `keras_lstm` correctly absent
+  from `/health` — but nothing re-checks that on a change, so a break would
+  surface on somebody's next `docker compose up`. CI is Phase 10.
+- **The image is 3.9 GB.** See [Packaging](#packaging) for where it goes. Most of
+  it is inherited from `riskfolio-lib`'s dependency tree and the torch wheel, so
+  trimming it means dropping capability, not tidying.
+- **The Dockerfile avoids BuildKit-only syntax** (cache and bind mounts), so it
+  builds with the classic builder where `buildx` is not installed. Rebuilds
+  re-download wheels that a cache mount would have kept.
+- **The image pins no base digest.** It tracks `python:3.12-slim-bookworm` by
+  tag, so two builds a month apart can differ below the Python layer even with
+  an unchanged `uv.lock`. Pin the digest if you need bit-identical rebuilds.
+- **`requires-python` is capped at `<3.13`.** The `keras` extra has no 3.13+
+  wheels, and the rest is untested there; the cap is honesty about what was run,
+  not a known incompatibility.
+- **The Streamlit app is not in the wheel or the image.** `Layer5_Streamlit_App/`
+  and `Layer4_Visualization/` have no `__init__.py` and are imported by nothing,
+  so they stay in the checkout. Phase 9 replaces both.
 - **Cancelling a running job needs a real worker.** `DELETE /pipeline/runs/{id}`
   stops a running job only on the `redis` backend; on `memory` it can cancel a
   queued job but only flags a running one, because Python threads cannot be
@@ -679,6 +813,6 @@ Phase 6 adds a `parquet` source alongside it.
 | 5 | Dataframes | Polars | **done** |
 | 6 | Storage | Parquet + DuckDB | **done** |
 | 7 | Tracking | MLflow | **done** |
-| 8 | Packaging | uv + pyproject.toml + Docker | next |
-| 9 | Frontend | React + TypeScript + Vite, ECharts | |
+| 8 | Packaging | uv + pyproject.toml + Docker | **done** |
+| 9 | Frontend | React + TypeScript + Vite, ECharts | next |
 | 10 | Quality | pytest + ruff + git | |
