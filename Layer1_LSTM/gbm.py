@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from .datasets import SplitDataset, Target, build_split
+from .datasets import SplitDataset, Target, build_splits
 from .results import SeriesForecast
 
 logger = logging.getLogger(__name__)
@@ -119,22 +119,15 @@ def forecast_universe(
     on_progress=None,
 ) -> tuple[list[SeriesForecast], list[tuple[str, str]]]:
     """Forecast every column of ``prices``, one booster or one shared booster."""
-    splits: dict[str, SplitDataset] = {}
-    failures: list[tuple[str, str]] = []
-
-    for ticker in prices.columns:
-        series = prices[ticker].dropna()
-        series.name = ticker
-        try:
-            splits[str(ticker)] = build_split(
-                series,
-                train_split=config.train_split,
-                target=config.target,
-                lags=config.lags,
-                window=None,  # trees take a flat design matrix
-            )
-        except Exception as exc:
-            failures.append((str(ticker), f"{type(exc).__name__}: {exc}"))
+    # One Polars pass builds features for every ticker, rather than looping in
+    # Python and rebuilding the same 22 columns per series.
+    splits, failures = build_splits(
+        prices,
+        train_split=config.train_split,
+        target=config.target,
+        lags=config.lags,
+        window=None,
+    )
 
     if not splits:
         return [], failures

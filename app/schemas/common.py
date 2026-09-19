@@ -86,6 +86,31 @@ class Frame(BaseModel):
         )
 
 
+    @classmethod
+    def from_polars(cls, frame: object, index_column: str = "date") -> Frame:
+        """Build from a ``polars.DataFrame`` whose row labels live in a column.
+
+        Polars has no index, so the labels are an ordinary column. Avoids a
+        round trip through pandas purely to serialise.
+        """
+        import polars as pl
+
+        if not isinstance(frame, pl.DataFrame):  # pragma: no cover - defensive
+            raise TypeError(f"expected a polars DataFrame, got {type(frame).__name__}")
+        if index_column not in frame.columns:
+            raise ValueError(f"index column {index_column!r} not in {frame.columns}")
+
+        columns = [name for name in frame.columns if name != index_column]
+        return cls(
+            index=[_as_label(value) for value in frame[index_column].to_list()],
+            columns=columns,
+            data=[
+                [_finite(value) for value in row]
+                for row in frame.select(columns).iter_rows()
+            ],
+        )
+
+
 def _as_label(label: object) -> str:
     """Dates become ISO-8601 strings; anything else becomes its str()."""
     if isinstance(label, dt.datetime):

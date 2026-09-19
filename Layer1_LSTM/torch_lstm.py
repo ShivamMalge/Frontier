@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from .datasets import SplitDataset, Target, build_split
+from .datasets import SplitDataset, Target, build_splits
 from .results import SeriesForecast
 
 logger = logging.getLogger(__name__)
@@ -187,22 +187,15 @@ def forecast_universe(
     tickers; otherwise one model per ticker. Either way each ticker is scaled by
     its own training statistics, so pooling does not mix incompatible units.
     """
-    splits: dict[str, SplitDataset] = {}
-    failures: list[tuple[str, str]] = []
-
-    for ticker in prices.columns:
-        series = prices[ticker].dropna()
-        series.name = ticker
-        try:
-            splits[str(ticker)] = build_split(
-                series,
-                train_split=config.train_split,
-                target=config.target,
-                lags=config.lags,
-                window=config.window,
-            )
-        except Exception as exc:
-            failures.append((str(ticker), f"{type(exc).__name__}: {exc}"))
+    # One Polars pass builds features for every ticker, rather than looping in
+    # Python and rebuilding the same 22 columns per series.
+    splits, failures = build_splits(
+        prices,
+        train_split=config.train_split,
+        target=config.target,
+        lags=config.lags,
+        window=config.window,
+    )
 
     if not splits:
         return [], failures

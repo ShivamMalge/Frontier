@@ -5,9 +5,9 @@
 Forecast equity prices, optimize portfolios across six strategies, and compare
 their risk-adjusted performance.
 
-**Migration status: Phases 1–4 of 10 complete**, plus walk-forward backtesting —
+**Migration status: Phases 1–5 of 10 complete**, plus walk-forward backtesting —
 FastAPI + Pydantic service layer, RQ + Redis job queue, PyTorch + LightGBM
-forecasting, cvxpy + Riskfolio-Lib optimizers.
+forecasting, cvxpy + Riskfolio-Lib optimizers, Polars data pipeline.
 See [Migration roadmap](#migration-roadmap).
 
 ---
@@ -273,7 +273,9 @@ app/                  FastAPI service (Phase 1)
   settings.py         env-overridable config
   errors.py           domain exceptions -> HTTP
 
-Layer1_Preprocessing/ price retrieval, return computation, synthetic source
+Layer1_Preprocessing/ price retrieval, returns, features, synthetic source
+    features_polars.py  22 features for the whole universe in one Polars pass
+    frames.py         the only sanctioned Polars/pandas crossings
 Layer1_LSTM/          forecasting (name is historical, not LSTM-only)
     torch_lstm.py     PyTorch LSTM
     gbm.py            LightGBM
@@ -290,7 +292,7 @@ Layer3_Portfolio_Generation/  construction, performance, selection
 Layer4_Visualization/ dead matplotlib code -- superseded, see below
 Layer5_Streamlit_App/ interim UI (Phase 9 replaces it)
 utils/                config, logging, filesystem helpers
-tests/                234 tests, no network access
+tests/                259 tests, no network access
 ```
 
 Dependencies point one way: `app` → `Layer*` → `utils`. Nothing in the numerical
@@ -411,6 +413,10 @@ Carried forward deliberately, each scheduled to a later phase:
   no bid-ask modelling and no borrow cost on shorts.
 - **One-step-ahead only.** Every backend predicts the next trading day. Multi-horizon
   forecasting is not implemented.
+- **Sequence models are memory-bound at scale.** A 60-step window over 22 features
+  is 60× the source data. Returning a strided view defers that cost, but PyTorch
+  materialises each batch, so a very large universe still needs batched loading
+  rather than one array.
 - **`Gerber_InvVar` still reads only the diagonal.** It now uses Riskfolio's
   published Gerber statistic rather than the old sign-based approximation, but
   inverse-variance weighting ignores the off-diagonals the statistic exists to
@@ -456,8 +462,8 @@ Phase 6 adds a `parquet` source alongside it.
 | 2 | Jobs | RQ + Redis | **done** |
 | 3 | Forecasting | PyTorch + LightGBM | **done** |
 | 4 | Optimizers | cvxpy (Clarabel/OSQP) + Riskfolio-Lib | **done** |
-| 5 | Dataframes | Polars | next |
-| 6 | Storage | Parquet + DuckDB | |
+| 5 | Dataframes | Polars | **done** |
+| 6 | Storage | Parquet + DuckDB | next |
 | 7 | Tracking | MLflow | |
 | 8 | Packaging | uv + pyproject.toml + Docker | |
 | 9 | Frontend | React + TypeScript + Vite, ECharts | |
