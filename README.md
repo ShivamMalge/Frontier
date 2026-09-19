@@ -404,6 +404,188 @@ both give Sharpe 1.050.
 The repo has shipped a `plot_effiecient_frontier.py` since the start. It plotted
 cumulative growth. This computes the actual curve.
 
+## Walk-forward backtest
+
+`POST /api/v1/backtest/runs` re-optimises on a **trailing** window at each rebalance
+and holds forward through data the optimizer never saw. Every other performance
+number in this repository is in-sample; this one is not.
+
+Three details decide whether a backtest means anything, and all three are handled:
+
+- **Weights drift.** Between rebalances the portfolio is *held*, so weights move with
+  prices (`w' = w(1+r)/(1+R)`). Pinning them to target daily implies free trading and
+  quietly inflates returns.
+- **Turnover is measured against the drifted weights**, not the previous target. That
+  difference is what actually has to be traded.
+- **Trading is charged.** `cost_bps` applies to traded notional at each rebalance.
+
+### The result that matters
+
+Ten tickers, 2016–2022, monthly rebalancing on a one-year window at 10 bps. 72
+rebalances, 1509 out-of-sample days.
+
+| Strategy | In-sample Sharpe | Walk-forward Sharpe | Gap | Turnover/yr | Cost drag |
+|---|---:|---:|---:|---:|---:|
+| `Markowitz_MaxSharpe` | **1.251** | 0.814 | **−0.438** | 5.63 | 0.56% |
+| `Markowitz_MinVar` | 0.891 | 0.736 | −0.154 | 1.84 | 0.18% |
+| `RiskParity` | 1.042 | 0.968 | −0.074 | **0.83** | **0.08%** |
+| `GMV` | 0.891 | 0.717 | −0.174 | 2.97 | 0.30% |
+| `HRP` | 0.996 | 0.998 | **+0.002** | 2.16 | 0.22% |
+| `HRP_CVaR` | 1.028 | **1.004** | −0.024 | 2.58 | 0.26% |
+| `Gerber_InvVar` | 1.006 | 0.932 | −0.075 | 0.93 | 0.09% |
+| `Gerber_HRP` | 0.987 | 0.989 | **+0.002** | 2.04 | 0.20% |
+| `MinCVaR` | 0.859 | 0.822 | −0.038 | 3.64 | 0.36% |
+| `MinCDaR` | 0.904 | 0.725 | −0.179 | 4.42 | 0.44% |
+
+**The strategy that looks best in-sample is not the one that survives.**
+`Markowitz_MaxSharpe` ranks first in-sample at 1.251 and fifth out of sample at
+0.814 — the largest degradation of any strategy. The out-of-sample winner is
+`HRP_CVaR` (1.004), and the two HRP variants are the only ones that do not degrade.
+
+That ordering is not a coincidence: **`Markowitz_MaxSharpe` is the only strategy that
+uses the return forecast**, so it is the only one exposed to estimation error in
+expected returns — and the forecast has no measurable edge. The risk-based methods
+ignore expected returns entirely and hold up. It also churns the most: 5.63× turnover
+a year against `RiskParity`'s 0.83×.
+
+Eight of ten strategies score worse out of sample than in.
+
+---
+
+## Polars data pipeline
+
+Feature engineering is Polars: the whole universe is transformed in a single pass with
+window expressions over `ticker`, rather than looping tickers in Python and rebuilding
+the same 22 rolling columns per series.
+
+2000 rows per ticker, 22 features:
+
+| Tickers | pandas, per-ticker loop | Polars, one pass | Speedup |
+|---:|---:|---:|---:|
+| 10 | 0.035 s | 0.012 s | 3.0× |
+| 200 | 0.601 s | 0.212 s | 2.8× |
+| 1000 | 2.791 s | 1.223 s | 2.3× |
+
+**About 2.3–3.1×, not the "5–30×" this migration was pitched on.** That estimate was
+wrong for this workload: pandas' rolling operations are already compiled C, so there
+is no interpreted inner loop to remove. The gain comes from parallelism across tickers
+and from not paying per-series overhead 22 times.
+
+### The speedup exposed the real bottleneck
+
+With features 3× faster, sequence construction for the LSTM became the dominant cost —
+41.5 s for 500 tickers at a 60-step window, because every window was stacked into a new
+array. Switching to `sliding_window_view` and returning the **view** rather than
+materialising it took that to **2.9 s**, a 14× win and a bigger improvement than Polars
+itself delivered.
+
+### Where the boundary sits
+
+Polars from the data source up to the point where the numbers become a matrix; numpy
+and pandas from there on. cvxpy and the models want numpy, and Riskfolio-Lib's API
+requires pandas. `Layer1_Preprocessing/frames.py` holds the only sanctioned crossings.
+
+Polars having no index is an advantage beyond speed: several of the original defects
+here were index-alignment hazards — a frame silently reindexed, a `droplevel` that
+removed the wrong level, columns assigned positionally.
+
+---
+
+## Price store
+
+**yfinance restates history.** Splits get re-adjusted and bad ticks corrected, so the
+adjusted close for a date five years ago is not guaranteed to be the number it returned
+yesterday. A pipeline that re-downloads on every run cannot reproduce its own results.
+
+```bash
+curl -X POST localhost:8000/api/v1/data/ingest \
+  -d '{"tickers":["AAPL","MSFT"],"start":"2010-01-01","end":"2024-01-01"}'
+
+SO_MARKET_DATA_SOURCE=parquet .venv/bin/python -m uvicorn app.main:app
+```
+
+Prices are ingested once into Parquet, partitioned by ticker, each row stamped with the
+`ingested_at` of the batch that wrote it. Re-ingesting is idempotent; a **restated** bar
+is reported rather than overwritten silently:
+
+```json
+{ "rows_added": 0, "rows_revised": 23, "revised_tickers": ["AAPL"],
+  "revisions": [{"date":"2020-01-02","old_adj_close":166.69,"new_adj_close":83.35}] }
+```
+
+The `parquet` source never falls back to the network — an unstored ticker is a `502`
+telling you to ingest it, because a quiet download would undo the whole point.
+
+`GET /data/coverage` reports rows, spans, vintages and **gaps**, which is how an
+interrupted ingestion or a delisting surfaces before a backtest silently spans it.
+
+### Why Parquet, and why both engines
+
+1,565,400 rows × 8 columns:
+
+| Format | Size | Read |
+|---|---:|---:|
+| CSV | 208.3 MB | 49 ms |
+| Parquet + zstd | **59.3 MB** | **27 ms** |
+
+| Operation | Polars | DuckDB |
+|---|---:|---:|
+| Filtered bulk read (26,080 rows) | **9.1 ms** | 36.9 ms |
+| `GROUP BY ticker` over 1.57M rows | 38.3 ms | **36.3 ms** |
+
+**DuckDB is not faster than Polars at anything measured here.** Polars is 4× quicker on
+the read that feeds the pipeline. DuckDB earns its place on *expressiveness*: gap
+detection is a `LAG` over a partition, and `POST /data/query` lets someone interrogate
+the store without writing Python. That endpoint accepts a single `SELECT`/`WITH` and
+nothing else, conservatively enough that `SELECT 'create'` is refused — DuckDB can
+`COPY` to the filesystem and `ATTACH` databases.
+
+---
+
+## Experiment tracking
+
+The original project reported "93%+ accuracy" with no record of what was measured, on
+which data, by which metric, or against what baseline. Off by default:
+
+```bash
+SO_MLFLOW_ENABLED=true .venv/bin/python -m uvicorn app.main:app
+mlflow ui --backend-store-uri sqlite:///data/mlflow.db
+```
+
+A run records the parameters (including the **seed**), the **git commit**, the
+configured data source, the **data vintage** from the store, forecast metrics as
+mean/min/max, every strategy's performance under its own prefix (`HRP__sharpe`), and
+per-ticker tables as artifacts.
+
+### The point, in two logged rows
+
+Two pipeline runs over AAPL/MSFT/JPM/PFE, 2018–2022:
+
+| Backend | `mase_vs_naive_mean` | `legacy_approximate_accuracy_mean` |
+|---|---:|---:|
+| `lightgbm` | 1.0085 | 98.16 |
+| `naive` | **1.0000** | 98.19 |
+
+The legacy metric puts LightGBM at 98.16 against a do-nothing baseline of 98.19 —
+indistinguishable. Both sit on the same run, so neither can be quoted without the
+other. `directional_accuracy_mean` was 0.5012, a coin flip.
+
+**On the size of that gap.** Re-running the same configuration across five seeds gives
+mean MASE between 1.0042 and 1.0232 — a spread of 0.0190, wider than the 0.0129 by
+which the model trails the baseline. The correct statement is that LightGBM is
+**indistinguishable from doing nothing**, not that it is worse. Quoting that gap as a
+finding would be the same mistake as quoting 93%, in the opposite direction.
+
+### Tracking never breaks the work
+
+A run is telemetry. If the store is unreachable or a metric will not serialise, the
+pipeline warns and finishes with `tracking_run_id: null`. Three tests assert this,
+including one pointing the tracking URI at an uncreatable path. A `None` metric is
+skipped rather than logged as zero — `directional_accuracy` is null for a flat
+forecast, and zero would read as "always wrong" instead of "never guessed".
+
+---
+
 ## Known limitations
 
 Carried forward deliberately, each scheduled to a later phase:
