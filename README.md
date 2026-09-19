@@ -5,9 +5,10 @@
 Forecast equity prices, optimize portfolios across six strategies, and compare
 their risk-adjusted performance.
 
-**Migration status: Phases 1–4 of 10 complete** — FastAPI + Pydantic service
-layer, RQ + Redis job queue, PyTorch + LightGBM forecasting, cvxpy +
-Riskfolio-Lib optimizers. See [Migration roadmap](#migration-roadmap).
+**Migration status: Phases 1–4 of 10 complete**, plus walk-forward backtesting —
+FastAPI + Pydantic service layer, RQ + Redis job queue, PyTorch + LightGBM
+forecasting, cvxpy + Riskfolio-Lib optimizers.
+See [Migration roadmap](#migration-roadmap).
 
 ---
 
@@ -141,6 +142,7 @@ baked into the normalisation. Remove that and price-level modelling falls apart.
 | `POST` | `/api/v1/forecast` | Forecast prices, derive predicted returns |
 | `POST` | `/api/v1/portfolio/optimize` | Weights for each strategy |
 | `POST` | `/api/v1/portfolio/performance` | Risk/return statistics per strategy |
+| `POST` | `/api/v1/backtest/runs` | Submit a walk-forward backtest → `202` + job id |
 | `POST` | `/api/v1/pipeline/runs` | Submit a full run → `202` + job id |
 | `GET` | `/api/v1/pipeline/runs/{id}` | Poll progress (excludes the result) |
 | `GET` | `/api/v1/pipeline/runs/{id}/result` | Fetch a completed run |
@@ -284,10 +286,11 @@ Layer2_Optimization/  ten strategies + dispatch
     riskfolio_strategies.py  HRP, Gerber, CVaR, CDaR
     constraints.py    box, leverage, group and turnover limits
 Layer3_Portfolio_Generation/  construction, performance, selection
+    backtest.py       walk-forward engine with costs
 Layer4_Visualization/ dead matplotlib code -- superseded, see below
 Layer5_Streamlit_App/ interim UI (Phase 9 replaces it)
 utils/                config, logging, filesystem helpers
-tests/                201 tests, no network access
+tests/                234 tests, no network access
 ```
 
 Dependencies point one way: `app` → `Layer*` → `utils`. Nothing in the numerical
@@ -396,12 +399,16 @@ cumulative growth. This computes the actual curve.
 
 Carried forward deliberately, each scheduled to a later phase:
 
-- **In-sample optimization** — weights are derived over the same window used to
-  score them, so the performance table is not an out-of-sample result. A
-  walk-forward backtest with periodic rebalancing is the remaining gap; the
-  turnover constraint added in Phase 4 is the mechanism it would use. *(pending)*
-- **No transaction costs.** A `max_turnover` budget can be imposed, but trading is
-  not charged for, so reported returns are gross. *(pending)*
+- **`POST /portfolio/optimize` and `POST /pipeline/runs` are in-sample.** They fit
+  weights on the window they report on, which is useful for inspecting a single
+  allocation but is not an out-of-sample result. Use
+  [`POST /backtest/runs`](#walk-forward-backtest) for that.
+- **The backtest uses realised returns, not forecasts.** It measures the
+  *strategies*, holding the forecast fixed. Walking the forecasting models forward
+  too — retraining at each rebalance — would be considerably more expensive and is
+  not implemented; `BacktestRequest.on_forecast` is reserved for it.
+- **Costs are a flat spread.** `cost_bps` on traded notional, with no market impact,
+  no bid-ask modelling and no borrow cost on shorts.
 - **One-step-ahead only.** Every backend predicts the next trading day. Multi-horizon
   forecasting is not implemented.
 - **`Gerber_InvVar` still reads only the diagonal.** It now uses Riskfolio's

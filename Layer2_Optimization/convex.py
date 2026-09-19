@@ -23,6 +23,7 @@ programs.
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -41,6 +42,13 @@ SOLVER_OPTIONS: dict[str, dict[str, float | int]] = {
     "SCS": {"eps": 1e-10, "max_iters": 20_000},
     "OSQP": {"eps_abs": 1e-10, "eps_rel": 1e-10, "max_iter": 50_000},
 }
+
+
+#: Largest risk-contribution deviation accepted from a risk-parity solve before it
+#: is reported. Solutions here typically land within 1e-9, so this is loose enough
+#: not to cry wolf -- a 1e-5 deviation on a 1/8 contribution is one part in 10,000 --
+#: while still catching a solve that genuinely failed to reach parity.
+PARITY_TOLERANCE = 1e-5
 
 
 class InfeasibleError(ValueError):
@@ -62,13 +70,25 @@ def _solve(problem, label: str) -> None:
     errors: list[str] = []
     for solver in SOLVER_ORDER:
         try:
-            problem.solve(solver=solver, **SOLVER_OPTIONS.get(solver, {}))
+            with warnings.catch_warnings():
+                # cvxpy warns whenever a solver cannot prove it met the requested
+                # tolerance. The tolerances here ask aggressively, so that fires
+                # routinely on solutions that are fine. Callers verify the property
+                # they care about instead of relying on the solver's own confidence.
+                warnings.filterwarnings("ignore", message=".*Solution may be inaccurate.*")
+                problem.solve(solver=solver, **SOLVER_OPTIONS.get(solver, {}))
         except Exception as exc:
             errors.append(f"{solver}: {type(exc).__name__}: {exc}")
             continue
         if problem.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
             if problem.status == cp.OPTIMAL_INACCURATE:
-                logger.warning("%s: %s returned an inaccurate solution", label, solver)
+                # Reported whenever the requested tolerance is not provably met,
+                # which the tolerances here ask for aggressively. It is not
+                # evidence of a bad answer: callers verify the property they
+                # actually care about (see the parity check in `risk_parity`)
+                # rather than trusting a status flag. Logging it at warning level
+                # would fire hundreds of times in a backtest and mean nothing.
+                logger.debug("%s: %s reported an inaccurate solution", label, solver)
             return
         errors.append(f"{solver}: {problem.status}")
 
@@ -269,7 +289,19 @@ def risk_parity(
     total = weights.sum()
     if not np.isfinite(weights).all() or total <= 0:
         raise InfeasibleError("risk_parity produced non-finite weights")
-    return weights / total, warnings
+    weights = weights / total
+
+    # Check the property the strategy exists to deliver, rather than trusting the
+    # solver's status flag. This is the failure mode that made the original
+    # SLSQP version return equal weights while reporting success.
+    deviation = float(np.abs(risk_contributions(weights, cov) - 1.0 / n).max())
+    if deviation > PARITY_TOLERANCE:
+        warnings.append(
+            f"RiskParity: risk contributions deviate from parity by {deviation:.2e}, "
+            f"above the {PARITY_TOLERANCE:.0e} tolerance -- treat these weights with caution"
+        )
+
+    return weights, warnings
 
 
 def risk_contributions(weights: np.ndarray, cov: np.ndarray) -> np.ndarray:
