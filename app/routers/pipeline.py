@@ -13,6 +13,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Response, status
 
 from app.jobs import TaskRef, get_job_store
+from app.schemas.job_results import JobResult
 from app.schemas.jobs import JobAccepted, JobStatus
 from app.schemas.pipeline import PipelineRequest
 from app.settings import get_settings
@@ -70,7 +71,9 @@ def get_status(job_id: str) -> JobStatus:
 
 @router.get(
     "/runs/{job_id}/result",
-    response_model=JobStatus,
+    # JobResult, not JobStatus: it narrows `result` to the three shapes tasks
+    # actually return, so clients get a published schema instead of `any`.
+    response_model=JobResult,
     summary="Fetch a completed run, including its result",
 )
 def get_result(job_id: str) -> JobStatus:

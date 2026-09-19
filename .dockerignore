@@ -22,7 +22,8 @@ mlflow.db
 
 # Not needed to build or run the service.
 tests/
-Layer4_Visualization/
+# The front end builds in its own context (frontend/Dockerfile).
+frontend/
 Dockerfile
 .dockerignore
 compose.yaml

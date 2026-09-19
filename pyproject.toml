@@ -5,9 +5,8 @@
 #   [project.dependencies]        everything the API, the CLI and the tests need
 #   [project.optional-dependencies]
 #       keras   the legacy TensorFlow backend, kept only to reproduce the
-#               original result; ~600 MB, and the backend disappears from
+#               original result; 1.3 GB, and the backend disappears from
 #               /health cleanly when it is absent
-#       ui      the interim Streamlit app (Phase 9 replaces it with React)
 #   [dependency-groups]
 #       dev     test and lint tooling; installed by `uv sync`, never shipped
 #
@@ -63,7 +62,6 @@ dependencies = [
 
 [project.optional-dependencies]
 keras = ["tensorflow-cpu>=2.17"]
-ui = ["streamlit>=1.38"]
 
 [dependency-groups]
 dev = [
@@ -86,9 +84,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-# Layer4_Visualization/ and Layer5_Streamlit_App/ are scripts, not packages (no
-# __init__.py, imported by nothing), so they stay out of the wheel. Run the
-# Streamlit app from a checkout until Phase 9 replaces it.
+# The front end is not a Python package: it builds with npm and ships in its own
+# image (frontend/Dockerfile).
 packages = [
     "app",
     "utils",

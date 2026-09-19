@@ -1,6 +1,6 @@
 # API + worker + Redis.
 #
-#   docker compose up --build         # API on http://127.0.0.1:8000
+#   docker compose up --build         # UI on http://127.0.0.1:8080, API on :8000
 #   docker compose up -d --scale worker=4
 #   docker compose run --rm api frontier --tickers AAPL MSFT --backend lightgbm
 #
@@ -50,6 +50,21 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: frontier-ui:local
+    ports:
+      - "8080:8080"
+    # nginx proxies /api and /health to the API, so the browser sees one origin
+    # and CORS never applies. The API need not be published at all for the UI to
+    # work; its port stays mapped only so curl and /docs remain reachable.
+    depends_on:
+      api:
+        condition: service_started
     restart: unless-stopped
 
   worker:

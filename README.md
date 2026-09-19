@@ -5,11 +5,11 @@
 Forecast equity prices, optimize portfolios across six strategies, and compare
 their risk-adjusted performance.
 
-**Migration status: Phases 1–8 of 10 complete**, plus walk-forward backtesting —
+**Migration status: Phases 1–9 of 10 complete**, plus walk-forward backtesting —
 FastAPI + Pydantic service layer, RQ + Redis job queue, PyTorch + LightGBM
 forecasting, cvxpy + Riskfolio-Lib optimizers, Polars data pipeline, Parquet +
-DuckDB price store, MLflow tracking, uv + Docker packaging. See
-[Migration roadmap](#migration-roadmap).
+DuckDB price store, MLflow tracking, uv + Docker packaging, and a React +
+TypeScript front end with ECharts. See [Migration roadmap](#migration-roadmap).
 
 ---
 
@@ -52,16 +52,21 @@ Run the tests:
 uv run pytest
 ```
 
-Or bring up API, worker and Redis together:
+Run the front end (needs the API above on port 8000):
 
 ```bash
-docker compose up --build
+cd frontend && npm install && npm run dev      # http://localhost:5173
+```
+
+Or bring up the whole stack — UI, API, worker and Redis:
+
+```bash
+docker compose up --build                      # http://127.0.0.1:8080
 ```
 
 `uv run <cmd>` syncs the environment first, so it is always in step with
-`uv.lock`. `.venv/bin/<cmd>` works too once `uv sync` has run. Two dependency
-sets are optional and left out by default — the legacy TensorFlow backend
-(`--extra keras`) and the interim Streamlit UI (`--extra ui`); see
+`uv.lock`. `.venv/bin/<cmd>` works too once `uv sync` has run. The legacy
+TensorFlow backend is optional and left out by default (`--extra keras`); see
 [Packaging](#packaging).
 
 ---
@@ -310,21 +315,28 @@ Layer2_Optimization/  ten strategies + dispatch
     constraints.py    box, leverage, group and turnover limits
 Layer3_Portfolio_Generation/  construction, performance, selection
     backtest.py       walk-forward engine with costs
-Layer4_Visualization/ dead matplotlib code -- superseded, see below
-Layer5_Streamlit_App/ interim UI (Phase 9 replaces it)
+frontend/             React + TypeScript, Vite, ECharts (Phase 9)
+    src/api/          generated schema.ts, fetch client, Frame helpers
+    src/charts/       ECharts wrapper, palette bridge, option builders
+    src/pages/        one file per page
+    src/components/   table, cards, chips, job progress
+    nginx.conf        serves the bundle, proxies /api to the service
+scripts/              gen_api_types.py: OpenAPI -> TypeScript
 utils/                config, logging, filesystem helpers
-tests/                321 tests, no network access
+tests/                321 Python tests, no network access
+                      frontend/src/**/*.test.ts: 21 more, in jsdom
 
 pyproject.toml        dependencies, extras, entry points, pytest config
-uv.lock               the resolved set, committed -- 212 packages
+uv.lock               the resolved set, committed -- 202 packages
 Dockerfile            one image, two roles (API and worker)
-compose.yaml          API + worker + Redis
+compose.yaml          UI + API + worker + Redis
 main.py               shim so `python main.py` works without an install
 ```
 
-Dependencies point one way: `app` → `Layer*` → `utils`. Nothing in the numerical
-core imports from `app`, so the CLI, the API and the Streamlit app all share one
-implementation and cannot drift apart.
+Dependencies point one way: `app` → `Layer*` → `utils`, and the front end talks
+only to the HTTP API. Nothing in the numerical core imports from `app`, so the
+CLI, the API and the browser all share one implementation and cannot drift
+apart.
 
 ---
 
@@ -612,7 +624,7 @@ Two files replace the old ad-hoc setup:
 
 | Was | Is now |
 |---|---|
-| `requirements.txt` — version *floors*, resolved fresh on every install | `pyproject.toml` + `uv.lock` — 212 packages pinned with hashes |
+| `requirements.txt` — version *floors*, resolved fresh on every install | `pyproject.toml` + `uv.lock` — 202 packages pinned with hashes |
 | `pytest.ini` | `[tool.pytest.ini_options]` in `pyproject.toml` |
 
 Four dependency sets, so a deployment installs what it will actually run:
@@ -621,15 +633,16 @@ Four dependency sets, so a deployment installs what it will actually run:
 |---|---|---|---|
 | runtime | `uv sync --no-dev` | 173 packages: API, jobs, Polars/DuckDB, optimizers, PyTorch, LightGBM, MLflow | what the image ships |
 | `keras` extra | `uv sync --extra keras` | `tensorflow-cpu` | 1.3 GB installed, for the one backend the [measured table](#every-backend-measured-on-real-data) shows is *worse* than a random walk. Absent, it disappears from `/health` and nothing else changes |
-| `ui` extra | `uv sync --extra ui` | `streamlit` | interim UI; Phase 9 deletes it |
 | `dev` group | `uv sync` (the default) | `pytest`, `httpx`, `fakeredis`, `redislite`, `ruff` | never shipped |
 
 `uv sync --all-extras` is the full set — the one the measured table was produced
-on, since it needs `keras_lstm`.
+on, since it needs `keras_lstm`. The front end has its own dependencies and its
+own lockfile under `frontend/`; no Python install pulls them.
 
 ### The lockfile is the point
 
-`uv.lock` is committed, and every install path that matters passes `--locked`,
+`uv.lock` is committed, `frontend/package-lock.json` beside it, and every
+install path that matters passes `--locked` (or `npm ci`),
 which **fails** on a stale lockfile rather than quietly resolving something else.
 So the image cannot contain a dependency set that was never tested, and a
 reviewer can see the exact set in the diff.
@@ -684,20 +697,93 @@ project's code: torch is 769 MB even as a CPU build, and `riskfolio-lib` pulls
 none of which the optimizers here call directly. Bytecode is precompiled
 (`UV_COMPILE_BYTECODE=1`), trading some of that size for faster cold starts.
 
-`compose.yaml` wires API, worker and Redis:
+`compose.yaml` wires the UI, the API, a worker and Redis:
 
 ```bash
-docker compose up --build                  # API on http://127.0.0.1:8000
+docker compose up --build                  # UI on http://127.0.0.1:8080
 docker compose up -d --scale worker=4      # forecasting is CPU-bound; scale by process
 docker compose run --rm api frontier --tickers AAPL MSFT --backend lightgbm
 docker build --build-arg EXTRAS="--extra keras" -t frontier:keras .
 ```
 
-Two choices there are deliberate. `SO_JOB_BACKEND=redis`, not `auto`: in a
+Three choices there are deliberate. `SO_JOB_BACKEND=redis`, not `auto`: in a
 container the broker is always supposed to be there, so falling back to the
-in-process queue would hide a broken deployment behind a working `/health`. And
-the API and worker share one named volume, because the worker *writes* the
-Parquet store and the MLflow database that the API then reads.
+in-process queue would hide a broken deployment behind a working `/health`. The
+API and worker share one named volume, because the worker *writes* the Parquet
+store and the MLflow database that the API then reads. And only the `api`
+service declares the build for the Python image — two services building one tag
+race each other and collide when tagging, which is exactly what the first
+`docker compose build` did.
+
+---
+
+## Front end
+
+React 19 + TypeScript on Vite, charts in ECharts, six pages against the same API
+the CLI uses. `npm run dev` proxies to the service; `docker compose up` serves
+the built bundle from nginx on <http://127.0.0.1:8080>.
+
+| Page | What it does |
+|---|---|
+| **Run** | Submits a pipeline run, polls it with a progress bar, and renders forecast quality, weights, growth and performance when it lands |
+| **Forecast** | One forecast in detail: predicted against actual per ticker, MASE against the random-walk baseline |
+| **Portfolio** | Ten strategies on realised returns, box constraints, and the efficient frontier with the selected strategy marked |
+| **Backtest** | Walk-forward run as a job: net against gross growth, cost drag, and the out-of-sample table |
+| **Data** | Store coverage and gaps, ingest as a job, and read-only SQL |
+| **Tracking** | MLflow runs with their parameters, metrics, git commit and data vintage |
+
+### Types are generated, not copied
+
+`scripts/gen_api_types.py` reads the OpenAPI schema straight off the app and
+writes `frontend/src/api/schema.ts`. A renamed response field therefore fails
+`tsc`, not a browser. Re-generate after changing anything in `app/schemas/`:
+
+```bash
+uv run python scripts/gen_api_types.py
+```
+
+It already caught two things. `PipelineResult.warnings` and `.failed` have
+defaults server-side but are *not* required in the schema, so the pages that
+rendered them unconditionally would have thrown on a response that omitted them.
+And the result endpoint published no schema at all for what a finished job
+contains — `JobStatus.result` was typed `Any`, since the job store is generic
+and keeps whatever a task returns. `app/schemas/job_results.py` now names the
+three shapes a task actually produces, so `GET /pipeline/runs/{id}/result`
+documents them and the front end generates real types instead of `unknown`.
+
+### Charts
+
+The palette is a validated eight-hue categorical ramp, declared once in
+`styles.css` as custom properties and read back by `charts/theme.ts`, so an
+option object can never disagree with the page around it. Both modes clear the
+colour-vision-deficiency separation floor; dark is its own set of steps against
+the dark surface, not an inverted light palette.
+
+Three rules the code enforces rather than documents:
+
+- **Hues are never cycled.** There are ten strategies and eight slots. Indexing
+  colour off the catalogue position — the obvious implementation — gave
+  `Markowitz_MaxSharpe` and `MinCVaR` the same blue, which the first screenshot
+  caught. Slots are allocated to what is on the chart instead, and capped at
+  eight; past that the UI folds or facets rather than inventing a ninth hue.
+- **Filtering never repaints the survivors.** An allocated slot stays with its
+  strategy until that strategy leaves the chart, so toggling one line does not
+  recolour the rest. `makeSlots` in `charts/theme.ts`, with tests.
+- **Every chart has a table beside it.** Three light-mode hues fall below 3:1
+  contrast against the surface; the rule for that is relief — a readable table
+  view or direct labels — and each chart here ships one or both.
+
+Charts are also where the browser cost is: ECharts is 596 kB of the bundle and
+sits in its own chunk, so an app edit does not invalidate it in a cache.
+
+### What the tests cover
+
+`npm test` runs 21 tests in jsdom: the Frame-to-series transforms, the
+formatters, the colour-slot allocator, and three mounting tests that boot the
+app against a stubbed API — one of which drives a pipeline job to a rendered
+result. They are not screenshots; jsdom paints nothing. What they catch is the
+class of failure that actually happens: a null field reaching a table, a bad
+hook, a page that renders nothing when the API is down.
 
 ---
 
@@ -752,22 +838,35 @@ Carried forward deliberately, each scheduled to a later phase:
   `risk_parity.py`, `gmv.py`, `hrp.py` and `gerber.py` are no longer called by
   anything. They are kept because their tests encode the defects found during the
   audit; delete them when that history stops being useful.
-- **`Layer4_Visualization/` is dead code** — four matplotlib `plt.show()`
-  functions, imported by nothing, and `plot_effiecient_frontier.py` (sic) plots
-  cumulative growth rather than an efficient frontier. Phase 9 supersedes it with
-  ECharts. It is left in place rather than deleted; remove it when you are ready.
+- **The front end has no end-to-end test.** The 21 jsdom tests mount pages
+  against a stubbed API; nothing drives a real browser against a real service on
+  every change. The pages were verified by hand in headless Chrome — which is
+  how the colour collision and two label overlaps were found — but that check
+  does not run in CI. Phase 10.
+- **The bundle is 900 kB** (295 kB gzipped), 596 kB of it ECharts. It is split
+  into its own chunk so it caches independently, but nothing is lazy-loaded by
+  route: opening Tracking still pays for the chart library.
+- **`/data/query` results are rendered as text.** Every column is right-aligned
+  and stringified, because the API returns untyped SQL rows. Fine for the
+  aggregate queries it is meant for; not a spreadsheet.
+- **The risk-tolerance slider re-selects client-side.** It re-picks along the
+  volatility ranking with the same positional rule the service uses, so moving
+  it never re-runs anything — but it is a second implementation of that rule,
+  and the two could drift.
 - **`venv/` is a 361 MB Windows virtualenv left over from the original project.**
   It is no longer tracked by git, and `.gitignore` keeps it that way, but it is
   still sitting in the working directory: `rm -rf venv/` when you want the disk
   back. It contains only numpy, pandas and streamlit — not TensorFlow, scipy,
   scikit-learn or yfinance — so it could never have run this project.
-- **No CI builds the image.** It was built and run end to end by hand — API
+- **No CI builds the images.** Both were built and run end to end by hand — API
   healthy, worker executing a queued pipeline run, `keras_lstm` correctly absent
-  from `/health` — but nothing re-checks that on a change, so a break would
-  surface on somebody's next `docker compose up`. CI is Phase 10.
-- **The image is 3.9 GB.** See [Packaging](#packaging) for where it goes. Most of
-  it is inherited from `riskfolio-lib`'s dependency tree and the torch wheel, so
-  trimming it means dropping capability, not tidying.
+  from `/health`, the UI served by nginx and driving a job through it — but
+  nothing re-checks that on a change, so a break would surface on somebody's
+  next `docker compose up`. CI is Phase 10.
+- **The API image is 3.9 GB.** See [Packaging](#packaging) for where it goes.
+  Most of it is inherited from `riskfolio-lib`'s dependency tree and the torch
+  wheel, so trimming it means dropping capability, not tidying. The UI image is
+  81 MB.
 - **The Dockerfile avoids BuildKit-only syntax** (cache and bind mounts), so it
   builds with the classic builder where `buildx` is not installed. Rebuilds
   re-download wheels that a cache mount would have kept.
@@ -777,9 +876,6 @@ Carried forward deliberately, each scheduled to a later phase:
 - **`requires-python` is capped at `<3.13`.** The `keras` extra has no 3.13+
   wheels, and the rest is untested there; the cap is honesty about what was run,
   not a known incompatibility.
-- **The Streamlit app is not in the wheel or the image.** `Layer5_Streamlit_App/`
-  and `Layer4_Visualization/` have no `__init__.py` and are imported by nothing,
-  so they stay in the checkout. Phase 9 replaces both.
 - **Cancelling a running job needs a real worker.** `DELETE /pipeline/runs/{id}`
   stops a running job only on the `redis` backend; on `memory` it can cancel a
   queued job but only flags a running one, because Python threads cannot be
@@ -814,5 +910,5 @@ Phase 6 adds a `parquet` source alongside it.
 | 6 | Storage | Parquet + DuckDB | **done** |
 | 7 | Tracking | MLflow | **done** |
 | 8 | Packaging | uv + pyproject.toml + Docker | **done** |
-| 9 | Frontend | React + TypeScript + Vite, ECharts | next |
-| 10 | Quality | pytest + ruff + git | |
+| 9 | Frontend | React + TypeScript + Vite, ECharts | **done** |
+| 10 | Quality | pytest + ruff + git | next |

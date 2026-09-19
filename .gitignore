@@ -20,6 +20,12 @@ mlflow.db
 *.h5
 *.keras
 
+# Front end
+node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+
 # Editors / OS
 .vscode/
 .idea/
