@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Environments -- never commit these. The repo currently carries a 361 MB
+# Windows venv/ directory; see README for removal.
+.venv/
+venv/
+env/
+.env
+
+# Data and model artefacts
+data/
+mlruns/
+*.parquet
+*.h5
+*.keras
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
