@@ -15,6 +15,7 @@ env/
 # Data and model artefacts
 data/
 mlruns/
+mlflow.db
 *.parquet
 *.h5
 *.keras

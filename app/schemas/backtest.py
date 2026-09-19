@@ -77,3 +77,6 @@ class BacktestResponse(BaseModel):
     gross_cumulative_growth: Frame
     turnover: Frame = Field(description="Rows are rebalance dates, columns strategies.")
     warnings: list[str] = Field(default_factory=list)
+    tracking_run_id: str | None = Field(
+        default=None, description="MLflow run id when tracking is enabled."
+    )

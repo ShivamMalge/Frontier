@@ -10,7 +10,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.errors import register_exception_handlers
 from app.jobs import get_job_store, set_job_store
-from app.routers import backtest, data, forecast, market, meta, pipeline, portfolio
+from app.routers import (
+    backtest,
+    data,
+    forecast,
+    market,
+    meta,
+    pipeline,
+    portfolio,
+    tracking,
+)
 from app.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -60,7 +69,16 @@ def create_app() -> FastAPI:
 
     # /health sits at the root so probes need not track the API version.
     app.include_router(meta.health_router)
-    for module in (meta, market, forecast, portfolio, pipeline, backtest, data):
+    for module in (
+        meta,
+        market,
+        forecast,
+        portfolio,
+        pipeline,
+        backtest,
+        data,
+        tracking,
+    ):
         app.include_router(module.router, prefix=settings.api_v1_prefix)
 
     return app

@@ -52,7 +52,7 @@ def run_backtest(request: dict[str, Any]) -> dict[str, Any]:
     returns, _price_result = market_data.get_returns(parsed.tickers, parsed.start, parsed.end)
 
     strategies = [s.value for s in parsed.strategies] if parsed.strategies else None
-    result, summary = backtest_service.run(
+    result, summary, tracking_run_id = backtest_service.run(
         returns,
         strategies=strategies,
         risk_free_rate=parsed.risk_free_rate,
@@ -93,6 +93,7 @@ def run_backtest(request: dict[str, Any]) -> dict[str, Any]:
         gross_cumulative_growth=Frame.from_pandas(result.cumulative(net=False)),
         turnover=Frame.from_pandas(result.turnover),
         warnings=result.warnings,
+        tracking_run_id=tracking_run_id,
     )
     report(1.0, "complete")
     return response.model_dump(mode="json")

@@ -38,3 +38,8 @@ class PipelineResult(BaseModel):
         default_factory=dict,
         description="Backend extras, e.g. LightGBM feature importances.",
     )
+    tracking_run_id: str | None = Field(
+        default=None,
+        description="MLflow run id when tracking is enabled, so the logged "
+        "parameters and metrics can be found later.",
+    )

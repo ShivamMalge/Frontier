@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     default_forecast_backend: str = "naive"
     price_cache_ttl_seconds: int = 3600
 
+    # --- tracking (Phase 7) ---
+    #: Off by default. Tracking is telemetry: it never fails a run, and nothing is
+    #: written unless this is set.
+    mlflow_enabled: bool = False
+    #: MLflow 3 deprecated the filesystem backend; SQLite is a single local file and
+    #: needs no server. `mlflow ui --backend-store-uri <this>` to browse runs.
+    mlflow_tracking_uri: str = "sqlite:///data/mlflow.db"
+    mlflow_experiment: str = "frontier"
+
     # --- jobs (Phase 2) ---
     #: "auto" prefers Redis and falls back to the in-process store when it is
     #: unreachable; "redis" refuses to start without it; "memory" never uses it.

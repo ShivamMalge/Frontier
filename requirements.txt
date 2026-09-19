@@ -46,6 +46,12 @@ lightgbm>=4.3
 # cleanly; nothing else depends on it.
 tensorflow-cpu>=2.17
 
+# --- experiment tracking ---
+# The full package, not mlflow-skinny: skinny cannot use a database backend, and
+# MLflow 3 has put the filesystem backend into maintenance mode. This pulls
+# SQLAlchemy, Flask and Alembic, which is also what makes `mlflow ui` work.
+mlflow>=3.0
+
 # --- interim UI (Phase 9 replaces this with React + TypeScript) ---
 streamlit>=1.38
 

@@ -5,10 +5,10 @@
 Forecast equity prices, optimize portfolios across six strategies, and compare
 their risk-adjusted performance.
 
-**Migration status: Phases 1–6 of 10 complete**, plus walk-forward backtesting —
+**Migration status: Phases 1–7 of 10 complete**, plus walk-forward backtesting —
 FastAPI + Pydantic service layer, RQ + Redis job queue, PyTorch + LightGBM
 forecasting, cvxpy + Riskfolio-Lib optimizers, Polars data pipeline, Parquet +
-DuckDB price store. See [Migration roadmap](#migration-roadmap).
+DuckDB price store, MLflow tracking. See [Migration roadmap](#migration-roadmap).
 
 ---
 
@@ -146,6 +146,8 @@ baked into the normalisation. Remove that and price-level modelling falls apart.
 | `POST` | `/api/v1/portfolio/optimize` | Weights for each strategy |
 | `POST` | `/api/v1/portfolio/performance` | Risk/return statistics per strategy |
 | `POST` | `/api/v1/backtest/runs` | Submit a walk-forward backtest → `202` + job id |
+| `GET` | `/api/v1/tracking/status` | Whether tracking is on, and where runs live |
+| `GET` | `/api/v1/tracking/runs` | Recent tracked runs with params and metrics |
 | `POST` | `/api/v1/pipeline/runs` | Submit a full run → `202` + job id |
 | `GET` | `/api/v1/pipeline/runs/{id}` | Poll progress (excludes the result) |
 | `GET` | `/api/v1/pipeline/runs/{id}/result` | Fetch a completed run |
@@ -266,6 +268,7 @@ app/                  FastAPI service (Phase 1)
   routers/            HTTP surface, thin
   schemas/            Pydantic contracts
   services/           adapters onto the numerical core
+    tracking.py       MLflow adapter; inert when disabled, never fails a run
   jobs/               job execution (Phase 2)
     base.py           JobStore protocol, JobRecord, TaskRef
     memory.py         thread-pool store
@@ -296,7 +299,7 @@ Layer3_Portfolio_Generation/  construction, performance, selection
 Layer4_Visualization/ dead matplotlib code -- superseded, see below
 Layer5_Streamlit_App/ interim UI (Phase 9 replaces it)
 utils/                config, logging, filesystem helpers
-tests/                300 tests, no network access
+tests/                321 tests, no network access
 ```
 
 Dependencies point one way: `app` → `Layer*` → `utils`. Nothing in the numerical
@@ -424,6 +427,16 @@ Carried forward deliberately, each scheduled to a later phase:
   callers on the strength of that check alone.
 - **The store holds volume and intraday range, but no feature uses them yet.** The
   Phase 3 features are close-only; widening them is a follow-on.
+- **No model artifacts are logged.** MLflow can store a trained model and its
+  signature; runs here record parameters, metrics and tables only. Re-running with
+  the logged seed and parameters reproduces the model rather than loading it.
+- **`mlflow` is a heavy dependency** — it pulls SQLAlchemy, Flask and Alembic for the
+  database backend and the UI. `mlflow-skinny` is lighter but cannot use a database
+  backend, and MLflow 3 has put the filesystem backend into maintenance mode, so the
+  full package is the only combination that works without running a server.
+- **Only jobs are tracked.** `POST /forecast` and `POST /portfolio/optimize` are
+  inspection endpoints and log nothing; pipeline runs and backtests are the
+  experiments.
 - **One-step-ahead only.** Every backend predicts the next trading day. Multi-horizon
   forecasting is not implemented.
 - **Sequence models are memory-bound at scale.** A 60-step window over 22 features
@@ -483,7 +496,7 @@ Phase 6 adds a `parquet` source alongside it.
 | 4 | Optimizers | cvxpy (Clarabel/OSQP) + Riskfolio-Lib | **done** |
 | 5 | Dataframes | Polars | **done** |
 | 6 | Storage | Parquet + DuckDB | **done** |
-| 7 | Tracking | MLflow | next |
-| 8 | Packaging | uv + pyproject.toml + Docker | |
+| 7 | Tracking | MLflow | **done** |
+| 8 | Packaging | uv + pyproject.toml + Docker | next |
 | 9 | Frontend | React + TypeScript + Vite, ECharts | |
 | 10 | Quality | pytest + ruff + git | |
