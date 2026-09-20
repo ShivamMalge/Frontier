@@ -63,7 +63,7 @@ def test_failed_ticker_does_not_sink_the_request(client, monkeypatch, window):
     """One ticker raising must be reported, not abort the whole forecast."""
     import dataclasses
 
-    from app.services import forecasting
+    from frontier.services import forecasting
 
     spec = forecasting._REGISTRY["naive"]
 

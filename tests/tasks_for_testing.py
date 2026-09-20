@@ -13,7 +13,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from app.jobs.progress import report
+from frontier.jobs.progress import report
 
 #: Dotted paths, so tests need not retype them.
 ECHO = "tests.tasks_for_testing.echo"

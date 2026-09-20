@@ -14,21 +14,21 @@ import numpy as np
 import polars as pl
 import pytest
 
-from app.schemas.common import Frame
-from Layer1_Preprocessing.feature_engineering import build_features, feature_names
-from Layer1_Preprocessing.features_polars import build_features_all, build_features_lazy
-from Layer1_Preprocessing.frames import (
+from frontier.api.schemas.common import Frame
+from frontier.data.feature_engineering import build_features, feature_names
+from frontier.data.features_polars import build_features_all, build_features_lazy
+from frontier.data.frames import (
     long_to_wide,
     pandas_wide_to_polars,
     polars_wide_to_pandas,
     wide_to_long,
 )
-from Layer1_Preprocessing.preprocessing import (
+from frontier.data.preprocessing import (
     compute_returns,
     compute_returns_long,
     compute_returns_polars,
 )
-from Layer1_Preprocessing.synthetic import synthetic_prices
+from frontier.data.synthetic import synthetic_prices
 
 TICKERS = ["AAA", "BBB", "CCC"]
 
@@ -185,7 +185,7 @@ class TestFrameFromPolars:
 
 class TestDatasetsUseThePolarsPath:
     def test_universe_builder_returns_one_split_per_ticker(self, pandas_prices):
-        from Layer1_LSTM.datasets import build_splits
+        from frontier.forecasting.datasets import build_splits
 
         splits, failures = build_splits(pandas_prices, train_split=2 / 3, window=None)
         assert sorted(splits) == sorted(TICKERS)
@@ -193,7 +193,7 @@ class TestDatasetsUseThePolarsPath:
         assert all(s.n_features == len(feature_names()) for s in splits.values())
 
     def test_single_series_helper_agrees_with_the_universe_builder(self, pandas_prices):
-        from Layer1_LSTM.datasets import build_split, build_splits
+        from frontier.forecasting.datasets import build_split, build_splits
 
         splits, _ = build_splits(pandas_prices, train_split=2 / 3, window=None)
         series = pandas_prices["AAA"]
@@ -205,7 +205,7 @@ class TestDatasetsUseThePolarsPath:
         assert list(single.test_dates) == list(splits["AAA"].test_dates)
 
     def test_a_bad_ticker_is_reported_not_fatal(self, pandas_prices):
-        from Layer1_LSTM.datasets import build_splits
+        from frontier.forecasting.datasets import build_splits
 
         short = pandas_prices.copy()
         short.loc[short.index[10:], "BBB"] = np.nan

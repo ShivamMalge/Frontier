@@ -82,7 +82,7 @@ export function App() {
         {!loading && offline && (
           <Note kind="error">
             The API is not answering. Start it with{" "}
-            <code>uv run uvicorn app.main:app --reload</code> and reload this page.
+            <code>uv run uvicorn frontier.api.main:app --reload</code> and reload this page.
           </Note>
         )}
         <Routes>

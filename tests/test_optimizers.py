@@ -9,10 +9,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from Layer2_Optimization.gmv import gmv_weights
-from Layer2_Optimization.hrp import get_quasi_diag, hrp_allocation
-from Layer2_Optimization.mean_variance import maximize_sharpe, min_variance
-from Layer2_Optimization.risk_parity import risk_contributions, risk_parity_weights
+from frontier.optimization.gmv import gmv_weights
+from frontier.optimization.hrp import get_quasi_diag, hrp_allocation
+from frontier.optimization.mean_variance import maximize_sharpe, min_variance
+from frontier.optimization.risk_parity import risk_contributions, risk_parity_weights
 
 
 def diagonal_cov(vols: np.ndarray) -> np.ndarray:
@@ -79,7 +79,7 @@ class TestHRP:
         from scipy.cluster.hierarchy import linkage
         from scipy.spatial.distance import squareform
 
-        from Layer2_Optimization.hrp import correl_dist
+        from frontier.optimization.hrp import correl_dist
 
         for n in (2, 5, 12):
             cov = correlated_cov(n)

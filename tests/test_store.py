@@ -13,9 +13,9 @@ import datetime as dt
 import polars as pl
 import pytest
 
-from Layer1_Preprocessing.frames import pandas_wide_to_polars, wide_to_long
-from Layer1_Preprocessing.store import PriceStore
-from Layer1_Preprocessing.synthetic import synthetic_prices
+from frontier.data.frames import pandas_wide_to_polars, wide_to_long
+from frontier.data.store import PriceStore
+from frontier.data.synthetic import synthetic_prices
 
 TICKERS = ["AAA", "BBB", "CCC"]
 

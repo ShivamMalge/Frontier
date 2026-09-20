@@ -5,8 +5,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Environments -- never commit these. The repo currently carries a 361 MB
-# Windows venv/ directory; see README for removal.
+# Environments -- never commit these. A 361 MB Windows venv/ was committed once;
+# untracking it is what this block exists to prevent happening twice.
 .venv/
 venv/
 env/

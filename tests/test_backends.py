@@ -12,14 +12,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from app.errors import UnknownBackendError
-from app.services.forecasting import (
+from frontier.data.synthetic import synthetic_prices
+from frontier.errors import UnknownBackendError
+from frontier.services.forecasting import (
     ForecastParams,
     available_backends,
     backend_specs,
     run_forecast,
 )
-from Layer1_Preprocessing.synthetic import synthetic_prices
 
 TICKERS = ["AAA", "BBB", "CCC"]
 
@@ -133,7 +133,10 @@ class TestMultiSeries:
 
     @pytest.mark.parametrize(
         ("backend", "module"),
-        [("torch_lstm", "Layer1_LSTM.torch_lstm"), ("lightgbm", "Layer1_LSTM.gbm")],
+        [
+            ("torch_lstm", "frontier.forecasting.torch_lstm"),
+            ("lightgbm", "frontier.forecasting.gbm"),
+        ],
     )
     def test_pooling_trains_one_model_instead_of_one_per_ticker(
         self, prices, backend, module, monkeypatch

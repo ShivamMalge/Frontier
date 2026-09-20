@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from Layer3_Portfolio_Generation.backtest import (
+from frontier.portfolio.backtest import (
     BacktestConfig,
     rebalance_schedule,
     run_backtest,

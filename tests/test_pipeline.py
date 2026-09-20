@@ -58,7 +58,7 @@ def test_completed_run_produces_a_coherent_result(client, window):
     assert result["tickers"] == TICKERS
     assert result["backend"] == "naive"
     assert len(result["forecast_metrics"]) == len(TICKERS)
-    from app.services.optimization import ALL_STRATEGIES
+    from frontier.services.optimization import ALL_STRATEGIES
 
     assert len(result["performance"]) == len(ALL_STRATEGIES)
 
@@ -98,7 +98,7 @@ def test_unknown_job_is_a_404(client):
 
 def test_failing_job_reports_the_reason_without_crashing_the_api(client, window):
     """A job body that raises must surface as state=failed, not a 500."""
-    from app.services import pipeline as pipeline_service
+    from frontier.services import pipeline as pipeline_service
 
     def boom(request, report=None):
         raise RuntimeError("synthetic pipeline failure")
@@ -120,9 +120,9 @@ def test_failing_job_reports_the_reason_without_crashing_the_api(client, window)
 
 def test_cancelling_a_queued_job_marks_it_cancelled(client):
     """A job still waiting for a worker can be cancelled outright."""
-    from app import jobs
-    from app.jobs import TaskRef
-    from app.settings import get_settings
+    from frontier import jobs
+    from frontier.jobs import TaskRef
+    from frontier.settings import get_settings
     from tests.tasks_for_testing import BLOCK_UNTIL_RELEASED, ECHO, signal_path
 
     store = jobs.get_job_store()
@@ -155,9 +155,9 @@ def test_job_records_expire_after_their_retention_window(client):
     """Finished records are evicted so a long-lived process does not leak them."""
     import datetime as dt
 
-    from app.errors import JobNotFoundError
-    from app.jobs import TaskRef
-    from app.jobs.memory import InMemoryJobStore
+    from frontier.errors import JobNotFoundError
+    from frontier.jobs import TaskRef
+    from frontier.jobs.memory import InMemoryJobStore
     from tests.tasks_for_testing import ECHO
 
     store = InMemoryJobStore(workers=1, retention_seconds=0)

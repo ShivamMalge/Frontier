@@ -22,11 +22,15 @@ mlflow.db
 
 # Not needed to build or run the service.
 tests/
+docs/
+scripts/
 # The front end builds in its own context (frontend/Dockerfile).
 frontend/
-Dockerfile
+# The Dockerfile and compose file are read by the daemon, not copied in.
+deploy/
 .dockerignore
-compose.yaml
+.github/
+.pre-commit-config.yaml
 
 .vscode/
 .idea/

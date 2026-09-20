@@ -11,10 +11,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from Layer1_LSTM.datasets import build_split
-from Layer1_LSTM.scaling import MinMax, Standardiser
-from Layer1_Preprocessing.feature_engineering import build_features, feature_names
-from Layer1_Preprocessing.synthetic import synthetic_prices
+from frontier.data.feature_engineering import build_features, feature_names
+from frontier.data.synthetic import synthetic_prices
+from frontier.forecasting.datasets import build_split
+from frontier.forecasting.scaling import MinMax, Standardiser
 
 
 @pytest.fixture

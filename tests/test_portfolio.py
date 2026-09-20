@@ -10,7 +10,7 @@ import pytest
 def test_optimize_returns_normalised_weights_for_every_strategy(client, returns_frame):
     body = client.post("/api/v1/portfolio/optimize", json={"returns": returns_frame}).json()
 
-    from app.services.optimization import ALL_STRATEGIES
+    from frontier.services.optimization import ALL_STRATEGIES
 
     assert set(body["weights"]["columns"]) == set(ALL_STRATEGIES)
     assert body["weights"]["index"] == ["AAA", "BBB", "CCC", "DDD"]
@@ -77,7 +77,7 @@ def test_performance_produces_plausible_annualised_statistics(client, returns_fr
         json={"returns": returns_frame, "weights": weights},
     ).json()
 
-    from app.services.optimization import ALL_STRATEGIES
+    from frontier.services.optimization import ALL_STRATEGIES
 
     assert len(body["performance"]) == len(ALL_STRATEGIES)
     for row in body["performance"]:

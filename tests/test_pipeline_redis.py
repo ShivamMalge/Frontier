@@ -12,9 +12,9 @@ import pytest
 from fastapi.testclient import TestClient
 from rq import Queue, SimpleWorker
 
-from app import jobs
-from app.jobs.redis_store import RedisJobStore
-from app.main import create_app
+from frontier import jobs
+from frontier.api.main import create_app
+from frontier.jobs.redis_store import RedisJobStore
 
 QUEUE = "test-api-pipeline"
 TICKERS = ["AAA", "BBB", "CCC", "DDD"]
@@ -63,7 +63,7 @@ def test_submitted_run_is_queued_then_executed_by_a_worker(redis_client, connect
 
     result = body["result"]
     assert result["tickers"] == TICKERS
-    from app.services.optimization import ALL_STRATEGIES
+    from frontier.services.optimization import ALL_STRATEGIES
 
     assert len(result["performance"]) == len(ALL_STRATEGIES)
     assert result["selected_strategy"] in result["weights"]["columns"]

@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from Layer2_Optimization import riskfolio_strategies as rs
+from frontier.optimization import riskfolio_strategies as rs
 
 
 @pytest.fixture
@@ -103,7 +103,7 @@ class TestGerber:
 class TestTailRisk:
     def test_min_cvar_concentrates_more_than_min_variance(self, returns):
         """Targeting only the left tail gives a different portfolio than variance."""
-        from Layer2_Optimization.convex import min_variance
+        from frontier.optimization.convex import min_variance
 
         assets = [str(c) for c in returns.columns]
         cvar = rs.min_cvar(returns)

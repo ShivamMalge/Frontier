@@ -10,6 +10,8 @@
 #   [dependency-groups]
 #       dev     test and lint tooling; installed by `uv sync`, never shipped
 #
+# The package itself lives under src/frontier; see [tool.hatch.build.targets.wheel].
+#
 # Installing:
 #   uv sync                 # runtime + dev, the working set for development
 #   uv sync --no-dev        # runtime only, what the Docker image builds
@@ -19,7 +21,7 @@
 [project]
 name = "frontier"
 version = "0.1.0"
-description = "LSTM forecasting and portfolio optimization across six strategies."
+description = "LSTM forecasting and portfolio optimization across ten strategies."
 readme = "README.md"
 # Upper-bounded deliberately: the `keras` extra has no 3.13+ wheels, and 3.13 is
 # untested for the rest. Raise it once the whole set is verified there.
@@ -79,24 +81,21 @@ dev = [
 ]
 
 [project.scripts]
-frontier = "app.cli:run"
-frontier-worker = "app.worker:run"
+frontier = "frontier.cli:run"
+frontier-worker = "frontier.worker:run"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
+# One distribution, one import name. A src/ layout means the tests import the
+# installed package rather than the working directory, so a module missing from
+# the wheel fails the suite instead of passing locally and breaking in Docker.
+#
 # The front end is not a Python package: it builds with npm and ships in its own
 # image (frontend/Dockerfile).
-packages = [
-    "app",
-    "utils",
-    "Layer1_LSTM",
-    "Layer1_Preprocessing",
-    "Layer2_Optimization",
-    "Layer3_Portfolio_Generation",
-]
+packages = ["src/frontier"]
 
 # A plain `pip install torch` pulls the CUDA build: ~2.5 GB of wheels that this
 # project never uses, since every model here trains on CPU. The explicit index
@@ -147,7 +146,7 @@ select = [
 
 # Each of these is off for a reason, not because it was noisy.
 ignore = [
-    # Imports inside functions are load-bearing here: `app/tasks.py` defers
+    # Imports inside functions are load-bearing here: `src/frontier/tasks.py` defers
     # heavy imports so a worker pays for them only when it runs that task, and
     # the forecasting backends import their framework lazily so a deployment
     # without torch still starts. 94 hits, all deliberate.
@@ -165,11 +164,13 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# The Layer* directory names are historical -- they are what the original
-# project called its pipeline stages, and renaming them would break every
-# import in the README and in anything anyone has already written against this.
-"Layer*/__init__.py" = ["N999"]
-"Layer*/*.py" = ["N999", "N803", "N806"]  # X_train, S, W: matrix names, by convention
+# X_train, S, W: the numerical core names matrices the way the literature does,
+# and renaming them to snake_case would make the formulas harder to check
+# against their source, not easier.
+"src/frontier/data/*.py" = ["N803", "N806"]
+"src/frontier/forecasting/*.py" = ["N803", "N806"]
+"src/frontier/optimization/*.py" = ["N803", "N806"]
+"src/frontier/portfolio/*.py" = ["N803", "N806"]
 "tests/*.py" = [
     # Fixed timestamps in fixtures, compared against stored values rather than
     # wall-clock. A timezone would add noise, not correctness.
@@ -179,17 +180,14 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = [
-    "app", "utils", "Layer1_LSTM", "Layer1_Preprocessing",
-    "Layer2_Optimization", "Layer3_Portfolio_Generation",
-]
+known-first-party = ["frontier"]
 
 [tool.ruff.format]
 docstring-code-format = true
 
 [tool.coverage.run]
 # The numerical core and the service, not the tests measuring them.
-source = ["app", "utils", "Layer1_LSTM", "Layer1_Preprocessing", "Layer2_Optimization", "Layer3_Portfolio_Generation"]
+source = ["src/frontier"]
 branch = true
 
 [tool.coverage.report]
@@ -205,7 +203,7 @@ exclude_lines = [
     "raise NotImplementedError",
     'if __name__ == "__main__":',
 ]
-# `app/worker.py` reads 0%: tests/test_worker_process.py runs it as a real
+# `src/frontier/worker.py` reads 0%: tests/test_worker_process.py runs it as a real
 # subprocess, which coverage does not follow. It is left in the measurement
 # rather than omitted -- omitting it would raise the number without covering
 # anything.
@@ -214,8 +212,7 @@ exclude_lines = [
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
 filterwarnings = [
-    "error::DeprecationWarning:app.*",
-    "error::DeprecationWarning:Layer*",
+    "error::DeprecationWarning:frontier.*",
     # Starlette's TestClient still imports httpx 1.x; not our call to make.
     "ignore::DeprecationWarning",
     "ignore::UserWarning",

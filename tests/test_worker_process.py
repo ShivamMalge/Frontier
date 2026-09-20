@@ -5,7 +5,7 @@ job in the calling process. That covers the RQ protocol but not the thing Phase 
 actually exists for: work leaving the API process entirely.
 
 This module starts a real Redis (via ``redislite``, no root or Docker needed) and
-launches ``python -m app.worker`` as a genuine subprocess, so it also exercises the
+launches ``python -m frontier.worker`` as a genuine subprocess, so it also exercises the
 worker entry point itself. It is skipped when ``redislite`` is unavailable.
 """
 
@@ -20,9 +20,9 @@ import time
 import pytest
 import redis
 
-from app.jobs.base import TaskRef
-from app.jobs.redis_store import RedisJobStore
-from app.schemas.jobs import JobState
+from frontier.api.schemas.jobs import JobState
+from frontier.jobs.base import TaskRef
+from frontier.jobs.redis_store import RedisJobStore
 from tests.tasks_for_testing import COUNT_UP, ECHO, FAIL
 
 redislite = pytest.importorskip("redislite", reason="needs redislite for a real Redis server")
@@ -51,7 +51,7 @@ def store(redis_url) -> RedisJobStore:
 def run_worker(redis_url: str, timeout: float = 120, **env: str) -> subprocess.CompletedProcess:
     """Run the real worker entry point in burst mode and wait for it to drain."""
     return subprocess.run(
-        [sys.executable, "-m", "app.worker", "--url", redis_url, "--queues", QUEUE, "--burst"],
+        [sys.executable, "-m", "frontier.worker", "--url", redis_url, "--queues", QUEUE, "--burst"],
         capture_output=True,
         text=True,
         # The exit code is what the caller asserts on; do not raise on it here.
@@ -109,7 +109,7 @@ def test_worker_reports_task_failure_back_through_redis(store, redis_url):
 
 def test_worker_exits_nonzero_when_redis_is_unreachable():
     completed = subprocess.run(
-        [sys.executable, "-m", "app.worker", "--url", "redis://127.0.0.1:1/0", "--burst"],
+        [sys.executable, "-m", "frontier.worker", "--url", "redis://127.0.0.1:1/0", "--burst"],
         capture_output=True,
         text=True,
         # A non-zero exit is exactly what this test is checking for.
@@ -129,8 +129,8 @@ def test_full_pipeline_crosses_the_process_boundary(store, redis_url):
     because a separate process cannot see this suite's fixtures -- and a test must
     not depend on the network.
     """
-    from app.schemas.pipeline import PipelineRequest
-    from app.tasks import RUN_PIPELINE
+    from frontier.api.schemas.pipeline import PipelineRequest
+    from frontier.tasks import RUN_PIPELINE
 
     request = PipelineRequest(
         tickers=["AAA", "BBB", "CCC"],
@@ -148,7 +148,7 @@ def test_full_pipeline_crosses_the_process_boundary(store, redis_url):
 
     result = done.result
     assert result["tickers"] == ["AAA", "BBB", "CCC"]
-    from app.services.optimization import ALL_STRATEGIES
+    from frontier.services.optimization import ALL_STRATEGIES
 
     assert len(result["performance"]) == len(ALL_STRATEGIES)
     assert result["selected_strategy"] in result["weights"]["columns"]

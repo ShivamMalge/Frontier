@@ -12,9 +12,9 @@ from itertools import pairwise
 import numpy as np
 import pytest
 
-from Layer2_Optimization import convex
-from Layer2_Optimization.constraints import Constraints
-from Layer2_Optimization.convex import (
+from frontier.optimization import convex
+from frontier.optimization.constraints import Constraints
+from frontier.optimization.convex import (
     InfeasibleError,
     efficient_frontier,
     max_return,

@@ -14,10 +14,10 @@ import fakeredis
 import pytest
 from rq import Queue, SimpleWorker
 
-from app.errors import JobNotFoundError
-from app.jobs.base import TaskRef
-from app.jobs.redis_store import RedisJobStore
-from app.schemas.jobs import JobState
+from frontier.api.schemas.jobs import JobState
+from frontier.errors import JobNotFoundError
+from frontier.jobs.base import TaskRef
+from frontier.jobs.redis_store import RedisJobStore
 from tests.tasks_for_testing import COUNT_UP, ECHO, FAIL
 
 QUEUE = "test-pipeline"

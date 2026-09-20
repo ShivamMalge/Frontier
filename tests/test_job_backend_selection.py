@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.jobs import create_job_store
-from app.settings import get_settings
+from frontier.jobs import create_job_store
+from frontier.settings import get_settings
 
 
 @pytest.fixture

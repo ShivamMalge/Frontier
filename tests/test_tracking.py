@@ -20,10 +20,10 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from app import jobs
-from app.main import create_app
-from app.services import tracking
-from app.settings import get_settings
+from frontier import jobs
+from frontier.api.main import create_app
+from frontier.services import tracking
+from frontier.settings import get_settings
 
 TICKERS = ["AAA", "BBB", "CCC"]
 WINDOW = {"start": "2018-01-01", "end": "2021-08-01"}
@@ -265,7 +265,7 @@ class TestTrackingNeverBreaksTheWork:
 
     def test_a_failing_run_is_marked_failed_not_left_open(self, tracked, monkeypatch):
         client, uri = tracked
-        from app.services import pipeline as pipeline_service
+        from frontier.services import pipeline as pipeline_service
 
         captured: dict[str, str] = {}
         original = pipeline_service._run

@@ -13,9 +13,9 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from app import jobs
-from app.main import create_app
-from app.services import market_data
+from frontier import jobs
+from frontier.api.main import create_app
+from frontier.services import market_data
 
 TICKERS = ["AAA", "BBB", "CCC", "DDD"]
 
@@ -45,26 +45,41 @@ def _stub_market_data(monkeypatch: pytest.MonkeyPatch) -> None:
     market_data.clear_cache()
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _default_to_memory_backend() -> None:
-    """Pin the default job backend for the suite.
+#: Settings the suite owns, whatever the surrounding environment says.
+#:
+#: ``SO_JOB_BACKEND`` -- without it every store construction would attempt
+#: localhost:6379, log a fallback warning and take the auto path. Tests that
+#: exercise the Redis backend install their own store explicitly.
+#:
+#: ``SO_MARKET_DATA_SOURCE`` -- ``_stub_market_data`` replaces the download
+#: function, which only the ``yfinance`` branch of ``market_data._fetch`` calls.
+#: Inheriting ``synthetic`` from the environment (CI exports it for the docker
+#: and playwright jobs) would route around the stub and hand every ticker a
+#: price series, including the unknown ones whose failure the API tests assert
+#: on. Tests that want another source set it themselves with monkeypatch.setenv,
+#: which still wins over this.
+PINNED_ENVIRONMENT = {
+    "SO_JOB_BACKEND": "memory",
+    "SO_MARKET_DATA_SOURCE": "yfinance",
+}
 
-    Without this every store construction would attempt localhost:6379, log a
-    fallback warning and take the auto path. Tests that specifically exercise the
-    Redis backend install their own store explicitly.
-    """
+
+@pytest.fixture(scope="session", autouse=True)
+def _pinned_environment() -> None:
+    """Make the suite independent of the ambient environment."""
     import os
 
-    from app.settings import get_settings
+    from frontier.settings import get_settings
 
-    previous = os.environ.get("SO_JOB_BACKEND")
-    os.environ["SO_JOB_BACKEND"] = "memory"
+    previous = {key: os.environ.get(key) for key in PINNED_ENVIRONMENT}
+    os.environ.update(PINNED_ENVIRONMENT)
     get_settings.cache_clear()
     yield
-    if previous is None:
-        os.environ.pop("SO_JOB_BACKEND", None)
-    else:
-        os.environ["SO_JOB_BACKEND"] = previous
+    for key, value in previous.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
     get_settings.cache_clear()
 
 
@@ -86,7 +101,7 @@ def client() -> TestClient:
 @pytest.fixture
 def returns_frame() -> dict:
     """A returns Frame payload, as the API expects it on the wire."""
-    from Layer1_Preprocessing.preprocessing import compute_returns
+    from frontier.data.preprocessing import compute_returns
 
     returns = compute_returns(synthetic_prices(TICKERS, periods=400))
     return {

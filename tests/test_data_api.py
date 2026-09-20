@@ -9,10 +9,10 @@ import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
-from app import jobs
-from app.main import create_app
-from app.settings import get_settings
-from Layer1_Preprocessing.store import PriceStore
+from frontier import jobs
+from frontier.api.main import create_app
+from frontier.data.store import PriceStore
+from frontier.settings import get_settings
 from tests.test_store import TICKERS, ohlcv
 
 
@@ -200,7 +200,7 @@ class TestQuery:
 class TestIngest:
     def test_ingest_is_submitted_as_a_job(self, store_client, monkeypatch):
         """The download is stubbed; the job wiring is what is under test."""
-        from app.services import market_data
+        from frontier.services import market_data
 
         def fake_download(tickers, start, end):
             return ohlcv([t for t in tickers if t in (*TICKERS, "DDD")], start, end)

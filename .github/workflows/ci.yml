@@ -23,8 +23,13 @@ permissions:
 
 env:
   # Never hit yfinance from CI: it rate-limits, restates history, and would make
-  # the suite fail for reasons that have nothing to do with the change.
+  # the suite fail for reasons that have nothing to do with the change. The
+  # pytest suite pins its own source (tests/conftest.py) and ignores this; it is
+  # here for the jobs that run the real service -- docker compose and playwright.
   SO_MARKET_DATA_SOURCE: synthetic
+
+  # Every `docker compose` below resolves this instead of a root compose.yaml.
+  COMPOSE_FILE: deploy/compose.yaml
 
 jobs:
   python:
