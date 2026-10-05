@@ -29,7 +29,7 @@ requires-python = ">=3.12,<3.13"
 
 dependencies = [
     # --- API ---
-    "fastapi>=0.115",
+    "fastapi>=0.142.2",
     "uvicorn[standard]>=0.30",
     "pydantic>=2.9",
     "pydantic-settings>=2.4",
@@ -39,14 +39,14 @@ dependencies = [
     # --- dataframes and storage ---
     "polars>=1.0",
     "pyarrow>=15.0",
-    "duckdb>=1.0",
+    "duckdb>=1.5.6",
     # --- numerical core ---
     "numpy>=2.0",
     "pandas>=2.2",
     "scipy>=1.14",
     "scikit-learn>=1.5",
     # --- optimization ---
-    "cvxpy>=1.5",
+    "cvxpy>=1.9.3",
     "clarabel>=0.9",
     "osqp>=0.6",
     "riskfolio-lib>=7.0",
@@ -54,7 +54,7 @@ dependencies = [
     "yfinance>=0.2.40",
     # --- forecasting ---
     # torch resolves to the CPU wheel on Linux and Windows; see [tool.uv.sources].
-    "torch>=2.4",
+    "torch>=2.14.1",
     "lightgbm>=4.3",
     # --- experiment tracking ---
     # The full package, not mlflow-skinny: skinny cannot use a database backend,
@@ -70,11 +70,11 @@ dev = [
     "pytest>=8.0",
     "httpx>=0.27",
     # In-process Redis fake: covers the RQ protocol without a server.
-    "fakeredis>=2.20",
+    "fakeredis>=2.39.0",
     # Bundles a real Redis server, so the multi-process worker tests can run
     # without Docker or root. tests/test_worker_process.py skips without it.
     "redislite>=6.0",
-    "ruff>=0.6",
+    "ruff>=0.16.10",
     "pytest-cov>=5.0",
     # Hooks are opt-in per clone: `uv run pre-commit install`.
     "pre-commit>=4.0",
